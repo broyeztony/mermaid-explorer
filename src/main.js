@@ -5,6 +5,9 @@ import "./styles.css";
 
 const dom = {
   examplePicker: document.querySelector("#examplePicker"),
+  nodeSearchShell: document.querySelector("#nodeSearchShell"),
+  nodeSearchInput: document.querySelector("#nodeSearchInput"),
+  nodeSearchResults: document.querySelector("#nodeSearchResults"),
   panModeBtn: document.querySelector("#panModeBtn"),
   boxModeBtn: document.querySelector("#boxModeBtn"),
   zoomOutBtn: document.querySelector("#zoomOutBtn"),
@@ -31,6 +34,9 @@ const state = {
   minimapSvg: null,
   minimapFrame: null,
   minimapFrameShadow: null,
+  searchIndex: [],
+  searchMatches: [],
+  focusedNode: null,
   interaction: null,
   animationFrame: 0,
   renderToken: 0,
@@ -51,16 +57,16 @@ mermaid.initialize({
     padding: 16,
   },
   themeVariables: {
-    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
-    primaryColor: "#ffffff",
-    primaryBorderColor: "#1e1e1e",
-    primaryTextColor: "#1e1e1e",
-    lineColor: "#1e1e1e",
-    secondaryColor: "#f7f7f7",
-    tertiaryColor: "#ffffff",
-    clusterBkg: "#f7f7f7",
-    clusterBorder: "#e6e6e6",
-    edgeLabelBackground: "#ffffff",
+    fontFamily: '"Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+    primaryColor: "#fffdf8",
+    primaryBorderColor: "#232938",
+    primaryTextColor: "#283041",
+    lineColor: "#657089",
+    secondaryColor: "#f3efe6",
+    tertiaryColor: "#fffdf8",
+    clusterBkg: "#f3efe6",
+    clusterBorder: "#cabca2",
+    edgeLabelBackground: "#fffdf8",
     background: "#ffffff",
   },
 });
@@ -87,6 +93,21 @@ function wireEvents() {
   dom.examplePicker.addEventListener("change", (event) => {
     loadExample(event.target.value);
   });
+
+  dom.nodeSearchInput.addEventListener("input", syncNodeSearchResults);
+  dom.nodeSearchInput.addEventListener("focus", syncNodeSearchResults);
+  dom.nodeSearchInput.addEventListener("keydown", onNodeSearchKeyDown);
+  dom.nodeSearchInput.addEventListener("blur", () => {
+    requestAnimationFrame(() => {
+      if (!dom.nodeSearchShell.matches(":focus-within")) {
+        hideNodeSearchResults();
+      }
+    });
+  });
+  dom.nodeSearchResults.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+  });
+  dom.nodeSearchResults.addEventListener("click", onNodeSearchResultClick);
 
   dom.renderBtn.addEventListener("click", () => {
     renderDiagram();
@@ -117,6 +138,7 @@ function wireEvents() {
 
   window.addEventListener("keydown", onKeyDown);
   window.addEventListener("keyup", onKeyUp);
+  document.addEventListener("pointerdown", onDocumentPointerDown);
 
   const resizeObserver = new ResizeObserver(() => {
     if (!state.viewBox || !state.rawBounds) {
@@ -182,18 +204,25 @@ async function renderDiagram() {
     state.fitBounds = fitRectToViewport(state.rawBounds);
     state.viewBox = { ...state.fitBounds };
     commitViewBox();
+    indexDiagramNodes();
     rebuildMinimap();
     setViewerEmpty(false);
+    syncNodeSearchResults();
     setStatus("Ready for navigation.", "Ready");
   } catch (error) {
     console.error(error);
     setViewerEmpty(true);
+    state.svg = null;
     state.rawBounds = null;
     state.fitBounds = null;
     state.viewBox = null;
+    state.minimapSvg = null;
+    state.minimapFrame = null;
+    state.minimapFrameShadow = null;
     dom.graphHost.innerHTML = "";
     dom.minimapHost.innerHTML = "";
     dom.zoomBadge.textContent = "100%";
+    clearNodeSearchIndex();
     setStatus(error.message, "Render failed");
   }
 }
@@ -206,19 +235,274 @@ function prepareSvg(svg) {
   svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
   svg.setAttribute("role", "img");
   svg.setAttribute("aria-label", "Rendered Mermaid diagram");
+}
 
-  const style = document.createElementNS("http://www.w3.org/2000/svg", "style");
-  style.textContent = `
-    text {
-      letter-spacing: 0.01em;
+function indexDiagramNodes() {
+  clearFocusedNode();
+  state.searchMatches = [];
+
+  if (!state.svg) {
+    state.searchIndex = [];
+    return;
+  }
+
+  state.searchIndex = Array.from(state.svg.querySelectorAll(".node"))
+    .map((element, index) => {
+      const label = extractNodeLabel(element);
+      const searchText = normalizeSearchText(label);
+
+      if (!searchText) {
+        return null;
+      }
+
+      return {
+        key: `${element.id || "node"}-${index}`,
+        id: element.id || `node-${index + 1}`,
+        label,
+        searchText,
+        words: searchText.split(/\s+/),
+        element,
+      };
+    })
+    .filter(Boolean);
+}
+
+function clearNodeSearchIndex() {
+  state.searchIndex = [];
+  state.searchMatches = [];
+  clearFocusedNode();
+  hideNodeSearchResults();
+}
+
+function extractNodeLabel(element) {
+  return `${element.textContent ?? ""}`
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizeSearchText(value) {
+  return `${value ?? ""}`
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function syncNodeSearchResults() {
+  const query = normalizeSearchText(dom.nodeSearchInput.value);
+
+  if (!query || !state.searchIndex.length) {
+    state.searchMatches = [];
+    hideNodeSearchResults();
+    return;
+  }
+
+  state.searchMatches = getNodeSearchMatches(query);
+  renderNodeSearchResults(state.searchMatches);
+}
+
+function getNodeSearchMatches(query) {
+  return state.searchIndex
+    .filter((item) => item.searchText.includes(query))
+    .sort((left, right) => {
+      const leftRank = getNodeSearchRank(left, query);
+      const rightRank = getNodeSearchRank(right, query);
+
+      if (leftRank !== rightRank) {
+        return leftRank - rightRank;
+      }
+
+      return left.label.localeCompare(right.label);
+    })
+    .slice(0, 12);
+}
+
+function getNodeSearchRank(item, query) {
+  if (item.searchText === query) {
+    return 0;
+  }
+
+  if (item.searchText.startsWith(query)) {
+    return 1;
+  }
+
+  if (item.words.some((word) => word.startsWith(query))) {
+    return 2;
+  }
+
+  return 3;
+}
+
+function renderNodeSearchResults(matches) {
+  dom.nodeSearchResults.replaceChildren();
+
+  const fragment = document.createDocumentFragment();
+
+  if (!matches.length) {
+    const empty = document.createElement("p");
+    empty.className = "search-empty";
+    empty.textContent = `No nodes match "${dom.nodeSearchInput.value.trim()}".`;
+    fragment.append(empty);
+  } else {
+    for (const match of matches) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "search-result";
+      button.dataset.nodeKey = match.key;
+
+      const label = document.createElement("span");
+      label.className = "search-result-text";
+      label.textContent = match.label;
+      button.append(label);
+      fragment.append(button);
     }
-    .nodeLabel,
-    .label text {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
-      font-weight: 300;
+  }
+
+  dom.nodeSearchResults.append(fragment);
+  dom.nodeSearchResults.hidden = false;
+  dom.nodeSearchShell.classList.add("is-open");
+  dom.nodeSearchInput.setAttribute("aria-expanded", "true");
+}
+
+function hideNodeSearchResults() {
+  dom.nodeSearchResults.hidden = true;
+  dom.nodeSearchResults.replaceChildren();
+  dom.nodeSearchShell.classList.remove("is-open");
+  dom.nodeSearchInput.setAttribute("aria-expanded", "false");
+}
+
+function onNodeSearchKeyDown(event) {
+  if (event.key === "Enter" && state.searchMatches[0]) {
+    event.preventDefault();
+    focusNodeMatch(state.searchMatches[0]);
+    return;
+  }
+
+  if (event.key === "Escape") {
+    hideNodeSearchResults();
+  }
+}
+
+function onNodeSearchResultClick(event) {
+  const button = event.target instanceof Element
+    ? event.target.closest(".search-result")
+    : null;
+
+  if (!button) {
+    return;
+  }
+
+  const match = state.searchMatches.find((item) => item.key === button.dataset.nodeKey);
+
+  if (!match) {
+    return;
+  }
+
+  focusNodeMatch(match);
+}
+
+function onDocumentPointerDown(event) {
+  if (!(event.target instanceof Node)) {
+    return;
+  }
+
+  if (dom.nodeSearchShell.contains(event.target)) {
+    return;
+  }
+
+  hideNodeSearchResults();
+}
+
+function focusNodeMatch(match) {
+  const target = match.element?.isConnected
+    ? match
+    : state.searchIndex.find((item) => item.key === match.key);
+
+  if (!target?.element) {
+    return;
+  }
+
+  const bounds = getNodeBounds(target.element);
+
+  if (!bounds) {
+    return;
+  }
+
+  setFocusedNode(target.element);
+  setViewBox(buildNodeFocusRect(bounds), true);
+  dom.nodeSearchInput.value = target.label;
+  hideNodeSearchResults();
+}
+
+function buildNodeFocusRect(bounds) {
+  const aspect = getViewerAspect();
+  const centerX = bounds.x + bounds.width / 2;
+  const centerY = bounds.y + bounds.height / 2;
+  const minWidth = state.fitBounds ? state.fitBounds.width * 0.2 : bounds.width * 7;
+  const contextualWidth = Math.max(bounds.width * 7, minWidth);
+  const contextualHeight = Math.max(bounds.height * 5.5, contextualWidth / aspect);
+
+  return adjustRectToAspect(
+    {
+      x: centerX - contextualWidth / 2,
+      y: centerY - contextualHeight / 2,
+      width: contextualWidth,
+      height: contextualHeight,
+    },
+    aspect,
+  );
+}
+
+function getNodeBounds(element) {
+  if (!state.svg || !state.viewBox) {
+    return null;
+  }
+
+  try {
+    const svgRect = state.svg.getBoundingClientRect();
+    const elementRect = element.getBoundingClientRect();
+
+    if (
+      svgRect.width > 0
+      && svgRect.height > 0
+      && elementRect.width > 0
+      && elementRect.height > 0
+    ) {
+      const left = state.viewBox.x + ((elementRect.left - svgRect.left) / svgRect.width) * state.viewBox.width;
+      const right = state.viewBox.x + ((elementRect.right - svgRect.left) / svgRect.width) * state.viewBox.width;
+      const top = state.viewBox.y + ((elementRect.top - svgRect.top) / svgRect.height) * state.viewBox.height;
+      const bottom = state.viewBox.y + ((elementRect.bottom - svgRect.top) / svgRect.height) * state.viewBox.height;
+
+      return normalizeRect({
+        x: Math.min(left, right),
+        y: Math.min(top, bottom),
+        width: Math.abs(right - left),
+        height: Math.abs(bottom - top),
+      });
     }
-  `;
-  svg.prepend(style);
+  } catch {}
+
+  return null;
+}
+
+function setFocusedNode(element) {
+  clearFocusedNode();
+
+  if (!element) {
+    return;
+  }
+
+  state.focusedNode = element;
+  state.focusedNode.classList.add("is-search-target");
+}
+
+function clearFocusedNode() {
+  if (!state.focusedNode?.isConnected) {
+    state.focusedNode = null;
+    return;
+  }
+
+  state.focusedNode.classList.remove("is-search-target");
+  state.focusedNode = null;
 }
 
 function rebuildMinimap() {
@@ -611,11 +895,11 @@ function animateViewBox(target) {
 
   const start = { ...state.viewBox };
   const startedAt = performance.now();
-  const duration = 240;
+  const duration = 360;
 
   const tick = (now) => {
     const progress = clamp((now - startedAt) / duration, 0, 1);
-    const eased = 1 - Math.pow(1 - progress, 3);
+    const eased = easeInOutCubic(progress);
 
     state.viewBox = {
       x: lerp(start.x, target.x, eased),
@@ -785,6 +1069,12 @@ function clamp(value, min, max) {
 
 function lerp(start, end, t) {
   return start + (end - start) * t;
+}
+
+function easeInOutCubic(t) {
+  return t < 0.5
+    ? 4 * t * t * t
+    : 1 - Math.pow(-2 * t + 2, 3) / 2;
 }
 
 function nextFrame() {

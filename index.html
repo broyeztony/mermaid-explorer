@@ -25,6 +25,21 @@
             <select id="examplePicker" aria-label="Diagram example"></select>
           </label>
 
+          <div class="search-shell" id="nodeSearchShell">
+            <label class="sr-only" for="nodeSearchInput">Search nodes</label>
+            <input
+              id="nodeSearchInput"
+              class="search-input"
+              type="search"
+              placeholder="Search nodes"
+              autocomplete="off"
+              spellcheck="false"
+              aria-label="Search diagram nodes"
+              aria-expanded="false"
+            />
+            <div id="nodeSearchResults" class="search-results" hidden></div>
+          </div>
+
           <div
             class="mode-switch"
             role="tablist"
@@ -98,10 +113,6 @@
             </div>
 
             <aside class="minimap-card" aria-label="Overview minimap">
-              <div class="minimap-head">
-                <p class="panel-label">Overview</p>
-                <p class="minimap-caption">Click to recenter</p>
-              </div>
               <div id="minimapHost" class="minimap-host"></div>
             </aside>
           </div>

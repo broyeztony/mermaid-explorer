@@ -1,3 +1,5 @@
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600&display=swap");
+
 :root {
   color-scheme: light;
   --ink: #1e1e1e;
@@ -46,6 +48,7 @@ body {
 }
 
 button,
+input,
 textarea,
 select {
   font: inherit;
@@ -162,6 +165,80 @@ button {
   min-width: 0;
 }
 
+.search-shell {
+  position: relative;
+  flex: 0 1 280px;
+  min-width: 220px;
+}
+
+.search-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid rgba(68, 71, 90, 0.9);
+  border-radius: var(--radius);
+  background: rgba(68, 71, 90, 0.78);
+  color: #f8f8f2;
+  font-size: var(--toolbar-font-size);
+}
+
+.search-input::placeholder {
+  color: rgba(248, 248, 242, 0.56);
+}
+
+.search-shell.is-open .search-input,
+.search-input:focus-visible {
+  background: rgba(68, 71, 90, 0.94);
+}
+
+.search-results {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  left: 0;
+  z-index: 30;
+  max-height: 320px;
+  overflow: auto;
+  padding: 6px;
+  border: 1px solid var(--toolbar-line);
+  border-radius: 8px;
+  background: rgba(33, 34, 44, 0.98);
+  box-shadow: 0 18px 48px rgba(9, 10, 14, 0.34);
+}
+
+.search-result {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  padding: 10px 11px;
+  border-radius: 6px;
+  background: transparent;
+  color: #f8f8f2;
+  text-align: left;
+}
+
+.search-result:hover,
+.search-result:focus-visible {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.search-result-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.search-empty {
+  margin: 0;
+  padding: 10px 11px;
+  color: rgba(248, 248, 242, 0.62);
+  font-size: 12px;
+}
+
 .field span {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   font-size: var(--toolbar-font-size);
@@ -262,17 +339,10 @@ button {
 }
 
 .viewer-caption,
-.minimap-caption,
 .empty-state p {
   margin: 0;
   color: var(--ink-soft);
   line-height: 1.45;
-}
-
-.minimap-caption {
-  max-width: 30ch;
-  text-align: right;
-  font-size: 12px;
 }
 
 #sourceInput {
@@ -390,20 +460,94 @@ kbd {
   display: block;
 }
 
+.diagram-svg text,
+.diagram-svg tspan {
+  fill: #283041;
+  letter-spacing: 0.01em;
+}
+
+.diagram-svg .node .label,
+.diagram-svg .nodeLabel,
+.diagram-svg .nodeLabel p,
+.diagram-svg .nodeLabel div,
+.diagram-svg .nodeLabel span,
+.diagram-svg .label text {
+  font-family: "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+  font-size: 13px;
+  font-weight: 500;
+  color: #283041 !important;
+  fill: #283041 !important;
+}
+
 .diagram-svg .node rect,
 .diagram-svg .node circle,
 .diagram-svg .node ellipse,
 .diagram-svg .node polygon,
 .diagram-svg .node path {
-  filter: none;
+  fill: #fffdf8;
+  stroke: #232938;
+  stroke-width: 1.6px;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 1px 0 rgba(16, 20, 27, 0.08));
 }
 
 .diagram-svg .edgePath path {
-  stroke-width: 1.5px;
+  stroke: #657089 !important;
+  stroke-width: 1.55px;
 }
 
 .diagram-svg .cluster rect {
+  fill: #f3efe6;
+  stroke: #cabca2;
+  stroke-width: 1.2px;
   filter: none;
+}
+
+.diagram-svg .cluster text,
+.diagram-svg .cluster span,
+.diagram-svg .cluster div,
+.diagram-svg .cluster p {
+  fill: #5c6577 !important;
+  color: #5c6577 !important;
+  font-family: "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.diagram-svg .edgeLabel rect {
+  fill: rgba(255, 253, 248, 0.96);
+  stroke: #ddd6ca;
+  stroke-width: 1px;
+}
+
+.diagram-svg .edgeLabel text,
+.diagram-svg .edgeLabel span,
+.diagram-svg .edgeLabel div,
+.diagram-svg .edgeLabel p {
+  fill: #4c5669 !important;
+  color: #4c5669 !important;
+  font-family: "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.diagram-svg .marker path,
+.diagram-svg marker path {
+  fill: #657089 !important;
+  stroke: #657089 !important;
+}
+
+.diagram-svg .node.is-search-target rect,
+.diagram-svg .node.is-search-target circle,
+.diagram-svg .node.is-search-target ellipse,
+.diagram-svg .node.is-search-target polygon,
+.diagram-svg .node.is-search-target path {
+  fill: #fff0a8 !important;
+  stroke: #c99700 !important;
+  stroke-width: 2.4px !important;
+  filter: drop-shadow(0 0 0 3px rgba(242, 203, 5, 0.18));
 }
 
 .selection-box {
@@ -442,31 +586,20 @@ kbd {
   bottom: 16px;
   z-index: 5;
   width: min(260px, calc(100% - 32px));
-  padding: 10px;
+  padding: 6px;
   border-radius: var(--radius);
-  background: rgba(33, 34, 44, 0.96);
-  border: 1px solid var(--toolbar-line);
-}
-
-.minimap-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 8px;
-}
-
-.minimap-card .panel-label,
-.minimap-card .minimap-caption {
-  color: rgba(248, 248, 242, 0.78);
+  background: rgba(33, 34, 44, 0.18);
+  border: 1px solid rgba(68, 71, 90, 0.42);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
 }
 
 .minimap-host {
   height: 156px;
   border-radius: var(--radius);
   overflow: hidden;
-  border: 1px solid var(--toolbar-line);
-  background: #282a36;
+  border: 1px solid rgba(68, 71, 90, 0.38);
+  background: rgba(40, 42, 54, 0.14);
 }
 
 .minimap-host svg {
@@ -474,6 +607,10 @@ kbd {
   width: 100%;
   height: 100%;
   cursor: pointer;
+}
+
+.minimap-host .minimap-svg {
+  opacity: 0.7;
 }
 
 .minimap-host .minimap-frame {
@@ -521,7 +658,6 @@ kbd {
 
 @media (max-width: 720px) {
   .viewer-caption,
-  .minimap-caption,
   .toolbar-caption {
     text-align: left;
     white-space: normal;
@@ -535,6 +671,11 @@ kbd {
   .field {
     width: 100%;
     flex-wrap: wrap;
+  }
+
+  .search-shell {
+    width: 100%;
+    flex-basis: 100%;
   }
 
   .toolbar-meta,
