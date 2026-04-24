@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0"
+    />
+    <title>Mermaid Explorer</title>
+    <meta
+      name="description"
+      content="A comfortable large-graph explorer for Mermaid diagrams."
+    />
+    <script type="module" src="/src/main.js"></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand">
+          <div class="title">Mermaid Explorer</div>
+        </div>
+
+        <div class="topbar-controls">
+          <label class="field select-field">
+            <select id="examplePicker" aria-label="Diagram example"></select>
+          </label>
+
+          <div
+            class="mode-switch"
+            role="tablist"
+            aria-label="Navigation mode"
+          >
+            <button id="panModeBtn" type="button" role="tab">
+              Hand
+            </button>
+            <button id="boxModeBtn" type="button" role="tab">
+              Box Zoom
+            </button>
+          </div>
+
+          <div class="toolbar-actions">
+            <button id="zoomOutBtn" type="button" class="ghost-button">
+              -
+            </button>
+            <button id="zoomInBtn" type="button" class="ghost-button">
+              +
+            </button>
+            <button id="fitBtn" type="button" class="ghost-button">
+              Fit
+            </button>
+            <button id="renderBtn" type="button" class="accent-button">
+              Render
+            </button>
+          </div>
+
+          <div class="toolbar-meta">
+            <div class="toolbar-meta-group">
+              <span class="metric-pill metric-pill-quiet" id="zoomBadge"
+                >100%</span
+              >
+            </div>
+            <p class="viewer-caption toolbar-caption" id="viewerCaption">
+              Wheel to zoom at cursor. Double-click to zoom deeper.
+            </p>
+          </div>
+        </div>
+      </header>
+
+      <main class="workspace">
+        <section class="panel composer-panel">
+          <label class="sr-only" for="sourceInput">Mermaid source</label>
+          <textarea
+            id="sourceInput"
+            spellcheck="false"
+            autocapitalize="off"
+            autocomplete="off"
+            autocorrect="off"
+          ></textarea>
+        </section>
+
+        <section class="panel viewer-panel">
+          <div id="viewer" class="viewer">
+            <div
+              id="viewportSurface"
+              class="viewport-surface"
+              data-cursor-mode="pan"
+              aria-label="Interactive Mermaid graph viewer"
+            >
+              <div id="graphHost" class="graph-host" aria-live="polite"></div>
+              <div id="selectionBox" class="selection-box" hidden></div>
+              <div id="emptyState" class="empty-state">
+                <p class="empty-eyebrow">Viewport</p>
+                <h3>Render a Mermaid graph to start exploring.</h3>
+                <p>
+                  Smooth wheel zoom, drag-to-pan, box zoom, and a minimap for orientation.
+                </p>
+              </div>
+            </div>
+
+            <aside class="minimap-card" aria-label="Overview minimap">
+              <div class="minimap-head">
+                <p class="panel-label">Overview</p>
+                <p class="minimap-caption">Click to recenter</p>
+              </div>
+              <div id="minimapHost" class="minimap-host"></div>
+            </aside>
+          </div>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>
