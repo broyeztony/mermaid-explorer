@@ -102,6 +102,45 @@
           </div>
         </section>
       </main>
+
+      <div id="instructionsModal" class="instructions-modal" hidden>
+        <div
+          class="instructions-card"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="instructionsTitle"
+        >
+          <div class="instructions-head">
+            <div>
+              <p class="panel-label">Help</p>
+              <h2 id="instructionsTitle" class="instructions-title">Quick start</h2>
+            </div>
+            <button
+              id="instructionsCloseBtn"
+              type="button"
+              class="instructions-close"
+              aria-label="Close instructions"
+            >
+              <span class="instructions-close-glyph" aria-hidden="true"></span>
+            </button>
+          </div>
+
+          <ul class="instructions-list">
+            <li class="instructions-item">
+              Drag to pan. Hold <kbd>Shift</kbd> and drag for a quick zoom box.
+            </li>
+            <li class="instructions-item">
+              Use the wheel to zoom at cursor. Double-click zooms deeper.
+            </li>
+            <li class="instructions-item">
+              Press <kbd>S</kbd> to search. Use <kbd>↑</kbd>/<kbd>↓</kbd> then <kbd>Enter</kbd>.
+            </li>
+            <li class="instructions-item">
+              Press <kbd>H</kbd> hand, <kbd>B</kbd> box zoom, <kbd>F</kbd> fit, <kbd>I</kbd> help.
+            </li>
+          </ul>
+        </div>
+      </div>
     </div>
   </body>
 </html>

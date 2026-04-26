@@ -4,6 +4,8 @@ import { examples } from "./examples.js";
 import "./styles.css";
 
 const dom = {
+  instructionsModal: document.querySelector("#instructionsModal"),
+  instructionsCloseBtn: document.querySelector("#instructionsCloseBtn"),
   nodeSearchShell: document.querySelector("#nodeSearchShell"),
   nodeSearchInput: document.querySelector("#nodeSearchInput"),
   nodeSearchResults: document.querySelector("#nodeSearchResults"),
@@ -38,6 +40,7 @@ const state = {
   animationFrame: 0,
   renderDebounceTimer: 0,
   renderToken: 0,
+  returnFocusTarget: null,
   spacePressed: false,
 };
 
@@ -75,9 +78,17 @@ function init() {
   wireEvents();
   applyMode("pan");
   loadExample(examples[0].id);
+  requestAnimationFrame(() => openInstructionsModal());
 }
 
 function wireEvents() {
+  dom.instructionsCloseBtn.addEventListener("click", () => closeInstructionsModal());
+  dom.instructionsModal.addEventListener("click", (event) => {
+    if (event.target === dom.instructionsModal) {
+      closeInstructionsModal();
+    }
+  });
+
   dom.sourceInput.addEventListener("input", scheduleRenderDiagram);
   dom.nodeSearchInput.addEventListener("input", syncNodeSearchResults);
   dom.nodeSearchInput.addEventListener("focus", syncNodeSearchResults);
@@ -705,6 +716,38 @@ function hideViewerCaption() {
   dom.viewerCaption.textContent = "";
 }
 
+function openInstructionsModal() {
+  if (!dom.instructionsModal.hidden) {
+    return;
+  }
+
+  state.returnFocusTarget = document.activeElement instanceof HTMLElement
+    ? document.activeElement
+    : null;
+  dom.instructionsModal.hidden = false;
+  document.body.classList.add("has-modal");
+  dom.instructionsCloseBtn.focus();
+}
+
+function closeInstructionsModal() {
+  if (dom.instructionsModal.hidden) {
+    return;
+  }
+
+  dom.instructionsModal.hidden = true;
+  document.body.classList.remove("has-modal");
+
+  if (state.returnFocusTarget?.isConnected) {
+    state.returnFocusTarget.focus();
+  }
+
+  state.returnFocusTarget = null;
+}
+
+function isInstructionsOpen() {
+  return !dom.instructionsModal.hidden;
+}
+
 function setViewerEmpty(isEmpty) {
   dom.viewer.classList.toggle("is-empty", isEmpty);
   dom.viewportSurface.classList.toggle("is-empty", isEmpty);
@@ -916,7 +959,22 @@ function onMinimapPointerDown(event) {
 }
 
 function onKeyDown(event) {
+  if (isInstructionsOpen()) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeInstructionsModal();
+    }
+
+    return;
+  }
+
   if (isEditableTarget(event.target)) {
+    return;
+  }
+
+  if (!event.metaKey && !event.ctrlKey && !event.altKey && (event.key === "i" || event.key === "I")) {
+    event.preventDefault();
+    openInstructionsModal();
     return;
   }
 

@@ -51,6 +51,10 @@ body {
   background: var(--canvas);
 }
 
+body.has-modal {
+  overflow: hidden;
+}
+
 *,
 *::before,
 *::after {
@@ -442,6 +446,114 @@ kbd {
   pointer-events: none;
 }
 
+.instructions-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(17, 18, 24, 0.36);
+  backdrop-filter: blur(10px);
+}
+
+.instructions-modal[hidden] {
+  display: none;
+}
+
+.instructions-card {
+  width: min(460px, calc(100vw - 32px));
+  padding: 24px 24px 18px;
+  border: 1px solid rgba(68, 71, 90, 0.18);
+  border-radius: 18px;
+  background: rgba(255, 253, 249, 0.98);
+  box-shadow: 0 24px 80px rgba(19, 19, 26, 0.16);
+}
+
+.instructions-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.instructions-title {
+  margin: 6px 0 0;
+  font-size: 22px;
+  line-height: 1.05;
+  font-weight: 400;
+  color: var(--ink);
+}
+
+.instructions-close {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0;
+  border: 1px solid rgba(68, 71, 90, 0.16);
+  border-radius: 10px;
+  background: rgba(247, 247, 247, 0.92);
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.instructions-close-glyph {
+  position: relative;
+  width: 12px;
+  height: 12px;
+}
+
+.instructions-close-glyph::before,
+.instructions-close-glyph::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 12px;
+  height: 1.5px;
+  border-radius: 999px;
+  background: rgba(40, 42, 54, 0.72);
+  transform-origin: center;
+}
+
+.instructions-close-glyph::before {
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.instructions-close-glyph::after {
+  transform: translate(-50%, -50%) rotate(-45deg);
+}
+
+.instructions-close:hover {
+  border-color: rgba(189, 147, 249, 0.34);
+  background: rgba(244, 239, 250, 0.92);
+  box-shadow: 0 6px 18px rgba(19, 19, 26, 0.08);
+}
+
+.instructions-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 10px;
+}
+
+.instructions-item {
+  color: var(--ink-soft);
+  font-size: 14px;
+  line-height: 1.52;
+}
+
 .viewer {
   position: relative;
   flex: 1;
@@ -769,6 +881,16 @@ kbd {
     left: 14px;
     max-width: none;
     border-radius: 12px;
+  }
+
+  .instructions-modal {
+    padding: 16px;
+  }
+
+  .instructions-card {
+    width: min(100vw - 16px, 420px);
+    padding: 20px 18px 16px;
+    border-radius: 16px;
   }
 
   .viewer {
