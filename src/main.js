@@ -13,6 +13,8 @@ const dom = {
   boxModeBtn: document.querySelector("#boxModeBtn"),
   fitBtn: document.querySelector("#fitBtn"),
   sourceInput: document.querySelector("#sourceInput"),
+  nodeCountBadge: document.querySelector("#nodeCountBadge"),
+  edgeCountBadge: document.querySelector("#edgeCountBadge"),
   zoomBadge: document.querySelector("#zoomBadge"),
   viewerCaption: document.querySelector("#viewerCaption"),
   viewer: document.querySelector("#viewer"),
@@ -197,6 +199,7 @@ async function renderDiagram() {
     state.viewBox = { ...state.fitBounds };
     commitViewBox();
     indexDiagramNodes();
+    updateDiagramMetrics();
     rebuildMinimap();
     setViewerEmpty(false);
     syncNodeSearchResults();
@@ -219,6 +222,7 @@ function clearDiagramState() {
   state.minimapFrameShadow = null;
   dom.graphHost.innerHTML = "";
   dom.minimapHost.innerHTML = "";
+  setDiagramMetrics(0, 0);
   dom.zoomBadge.textContent = "100%";
   clearNodeSearchIndex();
 }
@@ -295,6 +299,28 @@ function clearNodeSearchIndex() {
   state.activeSearchIndex = -1;
   clearFocusedNode();
   hideNodeSearchResults();
+}
+
+function updateDiagramMetrics() {
+  if (!state.svg) {
+    setDiagramMetrics(0, 0);
+    return;
+  }
+
+  const nodeCount = state.svg.querySelectorAll(".node").length;
+  const edgeCount = state.svg.querySelectorAll(".edgePath").length
+    || state.svg.querySelectorAll(".flowchart-link").length;
+
+  setDiagramMetrics(nodeCount, edgeCount);
+}
+
+function setDiagramMetrics(nodeCount, edgeCount) {
+  dom.nodeCountBadge.textContent = `${formatMetricCount(nodeCount, "node")}`;
+  dom.edgeCountBadge.textContent = `${formatMetricCount(edgeCount, "edge")}`;
+}
+
+function formatMetricCount(value, label) {
+  return `${value} ${label}${value === 1 ? "" : "s"}`;
 }
 
 function extractNodeLabel(element) {
