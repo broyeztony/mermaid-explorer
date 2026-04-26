@@ -21,50 +21,22 @@
         </div>
 
         <div class="topbar-controls">
-          <label class="field select-field">
-            <select id="examplePicker" aria-label="Diagram example"></select>
-          </label>
-
-          <div class="search-shell" id="nodeSearchShell">
-            <label class="sr-only" for="nodeSearchInput">Search nodes</label>
-            <input
-              id="nodeSearchInput"
-              class="search-input"
-              type="search"
-              placeholder="Search nodes"
-              autocomplete="off"
-              spellcheck="false"
-              aria-label="Search diagram nodes"
-              aria-expanded="false"
-            />
-            <div id="nodeSearchResults" class="search-results" hidden></div>
-          </div>
-
           <div
             class="mode-switch"
             role="tablist"
             aria-label="Navigation mode"
           >
-            <button id="panModeBtn" type="button" role="tab">
+            <button id="panModeBtn" type="button" role="tab" class="mode-button">
               Hand
             </button>
-            <button id="boxModeBtn" type="button" role="tab">
+            <button id="boxModeBtn" type="button" role="tab" class="mode-button">
               Box Zoom
             </button>
           </div>
 
           <div class="toolbar-actions">
-            <button id="zoomOutBtn" type="button" class="ghost-button">
-              -
-            </button>
-            <button id="zoomInBtn" type="button" class="ghost-button">
-              +
-            </button>
             <button id="fitBtn" type="button" class="ghost-button">
               Fit
-            </button>
-            <button id="renderBtn" type="button" class="accent-button">
-              Render
             </button>
           </div>
 
@@ -73,10 +45,21 @@
               <span class="metric-pill metric-pill-quiet" id="zoomBadge"
                 >100%</span
               >
+              <div class="search-shell" id="nodeSearchShell">
+                <label class="sr-only" for="nodeSearchInput">Search nodes</label>
+                <input
+                  id="nodeSearchInput"
+                  class="search-input"
+                  type="search"
+                  placeholder="Search nodes"
+                  autocomplete="off"
+                  spellcheck="false"
+                  aria-label="Search diagram nodes"
+                  aria-expanded="false"
+                />
+                <div id="nodeSearchResults" class="search-results" hidden></div>
+              </div>
             </div>
-            <p class="viewer-caption toolbar-caption" id="viewerCaption">
-              Wheel to zoom at cursor. Double-click to zoom deeper.
-            </p>
           </div>
         </div>
       </header>
@@ -95,6 +78,7 @@
 
         <section class="panel viewer-panel">
           <div id="viewer" class="viewer">
+            <p class="viewer-caption floating-viewer-caption" id="viewerCaption" hidden></p>
             <div
               id="viewportSurface"
               class="viewport-surface"
@@ -105,7 +89,7 @@
               <div id="selectionBox" class="selection-box" hidden></div>
               <div id="emptyState" class="empty-state">
                 <p class="empty-eyebrow">Viewport</p>
-                <h3>Render a Mermaid graph to start exploring.</h3>
+                <h3>Type Mermaid text to start exploring.</h3>
                 <p>
                   Smooth wheel zoom, drag-to-pan, box zoom, and a minimap for orientation.
                 </p>

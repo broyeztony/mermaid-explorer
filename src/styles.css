@@ -16,6 +16,16 @@
   --accent-b: #ff79c6;
   --accent-soft: rgba(189, 147, 249, 0.1);
   --selection-soft: rgba(189, 147, 249, 0.16);
+  --graph-node-fill: #fffaf3;
+  --graph-node-stroke: #565d76;
+  --graph-node-text: #283041;
+  --graph-edge: #766f93;
+  --graph-cluster-fill: #f4effa;
+  --graph-cluster-stroke: #d5c7e7;
+  --graph-cluster-text: #61597a;
+  --graph-edge-label-fill: rgba(250, 247, 255, 0.98);
+  --graph-edge-label-stroke: #ddd2ef;
+  --graph-edge-label-text: #5e5874;
   --radius: 4px;
   --toolbar-font-size: 13px;
 }
@@ -80,10 +90,10 @@ button {
 .topbar {
   display: flex;
   align-items: center;
-  justify-content: flex-start;
-  gap: 12px;
+  justify-content: space-between;
+  gap: 20px;
   min-height: 58px;
-  padding: 10px 12px;
+  padding: 10px 22px;
   border-bottom: 1px solid var(--toolbar-line);
   background: var(--toolbar-bg);
 }
@@ -92,14 +102,13 @@ button {
   display: flex;
   align-items: center;
   min-width: 0;
-  margin-right: auto;
 }
 
 .title {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: 0 0 0 10px;
+  margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   font-size: 18px;
   line-height: 1;
@@ -118,26 +127,28 @@ button {
 
 .topbar-controls {
   display: flex;
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: flex-end;
   min-width: 0;
   gap: 12px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 
 .toolbar-meta {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 14px;
+  gap: 10px;
+  flex: 0 0 auto;
   min-width: 0;
 }
 
 .toolbar-meta-group {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  flex: 0 0 auto;
 }
 
 .toolbar-meta .metric-pill {
@@ -151,13 +162,6 @@ button {
   color: rgba(248, 248, 242, 0.72);
 }
 
-.toolbar-caption {
-  color: rgba(248, 248, 242, 0.82);
-  font-size: var(--toolbar-font-size);
-  text-align: right;
-  white-space: nowrap;
-}
-
 .field {
   display: flex;
   align-items: center;
@@ -167,7 +171,7 @@ button {
 
 .search-shell {
   position: relative;
-  flex: 0 1 280px;
+  flex: 0 0 272px;
   min-width: 220px;
 }
 
@@ -222,6 +226,11 @@ button {
   background: rgba(255, 255, 255, 0.08);
 }
 
+.search-result.is-active {
+  background: rgba(189, 147, 249, 0.28);
+  color: #f8f8f2;
+}
+
 .search-result-text {
   min-width: 0;
   overflow: hidden;
@@ -261,7 +270,6 @@ button {
   font-size: var(--toolbar-font-size);
 }
 
-.mode-switch,
 .toolbar-actions {
   display: flex;
   align-items: center;
@@ -269,29 +277,33 @@ button {
 }
 
 .mode-switch {
-  padding: 0;
-  background: transparent;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.mode-switch button,
+.mode-button,
 .ghost-button,
 .accent-button {
   cursor: pointer;
   border-radius: var(--radius);
-  border: none;
+  border: 1px solid rgba(68, 71, 90, 0.92);
   transition:
+    border-color 150ms ease,
     background-color 150ms ease,
     color 150ms ease;
 }
 
-.mode-switch button {
-  padding: 8px 12px;
-  background: transparent;
+.mode-button {
+  min-width: 106px;
+  padding: 8px 14px;
+  background: rgba(68, 71, 90, 0.74);
   color: rgba(248, 248, 242, 0.85);
   font-size: var(--toolbar-font-size);
 }
 
-.mode-switch button.is-active {
+.mode-button.is-active {
+  border-color: rgba(189, 147, 249, 0.9);
   background: var(--accent-a);
   color: #282a36;
 }
@@ -313,9 +325,10 @@ button {
   color: #282a36;
 }
 
-.mode-switch button:hover,
+.mode-button:hover,
 .ghost-button:hover,
 .accent-button:hover {
+  border-color: rgba(255, 121, 198, 0.72);
   background: var(--accent-b);
   color: #282a36;
 }
@@ -413,6 +426,22 @@ kbd {
   white-space: nowrap;
 }
 
+.floating-viewer-caption {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  z-index: 6;
+  max-width: min(520px, calc(100% - 36px));
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.84);
+  color: rgba(30, 30, 30, 0.62);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 8px 24px rgba(18, 18, 24, 0.08);
+  pointer-events: none;
+}
+
 .viewer {
   position: relative;
   flex: 1;
@@ -458,11 +487,12 @@ kbd {
 
 .diagram-svg {
   display: block;
+  overflow: visible;
 }
 
 .diagram-svg text,
 .diagram-svg tspan {
-  fill: #283041;
+  fill: var(--graph-node-text);
   letter-spacing: 0.01em;
 }
 
@@ -475,8 +505,8 @@ kbd {
   font-family: "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
   font-size: 13px;
   font-weight: 500;
-  color: #283041 !important;
-  fill: #283041 !important;
+  color: var(--graph-node-text) !important;
+  fill: var(--graph-node-text) !important;
 }
 
 .diagram-svg .node rect,
@@ -484,21 +514,30 @@ kbd {
 .diagram-svg .node ellipse,
 .diagram-svg .node polygon,
 .diagram-svg .node path {
-  fill: #fffdf8;
-  stroke: #232938;
-  stroke-width: 1.6px;
+  fill: var(--graph-node-fill);
+  stroke: var(--graph-node-stroke);
+  stroke-width: 1.5px;
   stroke-linejoin: round;
-  filter: drop-shadow(0 1px 0 rgba(16, 20, 27, 0.08));
+  filter: drop-shadow(0 2px 10px rgba(16, 20, 27, 0.08));
 }
 
-.diagram-svg .edgePath path {
-  stroke: #657089 !important;
-  stroke-width: 1.55px;
+.diagram-svg .node rect {
+  shape-rendering: geometricPrecision;
+}
+
+.diagram-svg .edgePath path,
+.diagram-svg .flowchart-link {
+  fill: none !important;
+  stroke: var(--graph-edge) !important;
+  stroke-width: 1.8px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.94;
 }
 
 .diagram-svg .cluster rect {
-  fill: #f3efe6;
-  stroke: #cabca2;
+  fill: var(--graph-cluster-fill);
+  stroke: var(--graph-cluster-stroke);
   stroke-width: 1.2px;
   filter: none;
 }
@@ -507,8 +546,8 @@ kbd {
 .diagram-svg .cluster span,
 .diagram-svg .cluster div,
 .diagram-svg .cluster p {
-  fill: #5c6577 !important;
-  color: #5c6577 !important;
+  fill: var(--graph-cluster-text) !important;
+  color: var(--graph-cluster-text) !important;
   font-family: "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
   font-size: 11px;
   font-weight: 600;
@@ -517,8 +556,8 @@ kbd {
 }
 
 .diagram-svg .edgeLabel rect {
-  fill: rgba(255, 253, 248, 0.96);
-  stroke: #ddd6ca;
+  fill: var(--graph-edge-label-fill);
+  stroke: var(--graph-edge-label-stroke);
   stroke-width: 1px;
 }
 
@@ -526,8 +565,8 @@ kbd {
 .diagram-svg .edgeLabel span,
 .diagram-svg .edgeLabel div,
 .diagram-svg .edgeLabel p {
-  fill: #4c5669 !important;
-  color: #4c5669 !important;
+  fill: var(--graph-edge-label-text) !important;
+  color: var(--graph-edge-label-text) !important;
   font-family: "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
   font-size: 11px;
   font-weight: 500;
@@ -535,8 +574,30 @@ kbd {
 
 .diagram-svg .marker path,
 .diagram-svg marker path {
-  fill: #657089 !important;
-  stroke: #657089 !important;
+  fill: var(--graph-edge) !important;
+  stroke: var(--graph-edge) !important;
+}
+
+.diagram-svg .labelBkg {
+  fill: var(--graph-edge-label-fill);
+  stroke: var(--graph-edge-label-stroke);
+}
+
+.diagram-svg .edgePatterns path,
+.diagram-svg .edge-thickness-normal,
+.diagram-svg .edge-thickness-thick {
+  stroke: var(--graph-edge) !important;
+}
+
+.diagram-svg .arrowheadPath {
+  fill: var(--graph-edge) !important;
+}
+
+.diagram-svg .node > * {
+  transition:
+    fill 160ms ease,
+    stroke 160ms ease,
+    filter 160ms ease;
 }
 
 .diagram-svg .node.is-search-target rect,
@@ -639,6 +700,7 @@ kbd {
 
   .topbar-controls {
     justify-content: flex-start;
+    flex-wrap: wrap;
   }
 
   .workspace {
@@ -657,8 +719,7 @@ kbd {
 }
 
 @media (max-width: 720px) {
-  .viewer-caption,
-  .toolbar-caption {
+  .viewer-caption {
     text-align: left;
     white-space: normal;
   }
@@ -676,6 +737,7 @@ kbd {
   .search-shell {
     width: 100%;
     flex-basis: 100%;
+    min-width: 0;
   }
 
   .toolbar-meta,
@@ -690,10 +752,23 @@ kbd {
     justify-content: space-between;
   }
 
-  .mode-switch button,
+  .mode-switch {
+    display: flex;
+    width: 100%;
+  }
+
+  .mode-button,
   .ghost-button,
   .accent-button {
     flex: 1;
+  }
+
+  .floating-viewer-caption {
+    top: 14px;
+    right: 14px;
+    left: 14px;
+    max-width: none;
+    border-radius: 12px;
   }
 
   .viewer {
