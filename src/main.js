@@ -55,7 +55,7 @@ mermaid.initialize({
   maxEdges: 500,
   theme: "base",
   flowchart: {
-    htmlLabels: false,
+    htmlLabels: true,
     nodeSpacing: 56,
     rankSpacing: 84,
     curve: "monotoneX",
@@ -249,7 +249,6 @@ function parseAndSanitizeSvg(svgMarkup) {
 function sanitizeSvgElement(root) {
   const blockedSelectors = [
     "script",
-    "foreignObject",
     "iframe",
     "object",
     "embed",
@@ -323,18 +322,22 @@ function indexDiagramNodes() {
     return;
   }
 
-  state.searchIndex = Array.from(state.svg.querySelectorAll(".node"))
-    .map((element, index) => {
-      const label = extractNodeLabel(element);
+  const sourceNodes = extractSourceNodes(dom.sourceInput.value);
+  const renderedNodes = Array.from(state.svg.querySelectorAll(".node"));
+
+  state.searchIndex = sourceNodes
+    .map((node, index) => {
+      const element = renderedNodes.find((candidate) => matchesRenderedNodeId(candidate.id, node.id));
+      const label = node.label || extractNodeLabel(element);
       const searchText = normalizeSearchText(label);
 
-      if (!searchText) {
+      if (!element || !searchText) {
         return null;
       }
 
       return {
-        key: `${element.id || "node"}-${index}`,
-        id: element.id || `node-${index + 1}`,
+        key: `${node.id}-${index}`,
+        id: node.id,
         label,
         searchText,
         words: searchText.split(/\s+/),
@@ -378,6 +381,56 @@ function extractNodeLabel(element) {
   return `${element.textContent ?? ""}`
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function extractSourceNodes(source) {
+  const seen = new Set();
+  const nodes = [];
+  const lines = `${source ?? ""}`.split("\n");
+  const patterns = [
+    /([A-Za-z_][\w-]*)\s*\(\(\s*"([^"]+)"\s*\)\)/g,
+    /([A-Za-z_][\w-]*)\s*\(\(\s*([^()\n]+?)\s*\)\)/g,
+    /([A-Za-z_][\w-]*)\s*\[\[\s*"([^"]+)"\s*\]\]/g,
+    /([A-Za-z_][\w-]*)\s*\[\[\s*([^\]\n]+?)\s*\]\]/g,
+    /([A-Za-z_][\w-]*)\s*\[\s*"([^"]+)"\s*\]/g,
+    /([A-Za-z_][\w-]*)\s*\[\s*([^\]\n"]+?)\s*\]/g,
+    /([A-Za-z_][\w-]*)\s*\(\s*"([^"]+)"\s*\)/g,
+    /([A-Za-z_][\w-]*)\s*\(\s*([^()\n"]+?)\s*\)/g,
+    /([A-Za-z_][\w-]*)\s*\{\{\s*"([^"]+)"\s*\}\}/g,
+    /([A-Za-z_][\w-]*)\s*\{\{\s*([^}\n"]+?)\s*\}\}/g,
+    /([A-Za-z_][\w-]*)\s*\{\s*"([^"]+)"\s*\}/g,
+    /([A-Za-z_][\w-]*)\s*\{\s*([^}\n"]+?)\s*\}/g,
+  ];
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+
+    if (!line || line.startsWith("%%") || line.startsWith("subgraph ") || line === "end") {
+      continue;
+    }
+
+    for (const pattern of patterns) {
+      pattern.lastIndex = 0;
+
+      for (const match of line.matchAll(pattern)) {
+        const id = match[1];
+        const label = `${match[2] ?? ""}`.trim();
+
+        if (!id || !label || seen.has(id)) {
+          continue;
+        }
+
+        seen.add(id);
+        nodes.push({ id, label });
+      }
+    }
+  }
+
+  return nodes;
+}
+
+function matchesRenderedNodeId(renderedId, sourceId) {
+  return `${renderedId ?? ""}`.includes(`-${sourceId}-`);
 }
 
 function normalizeSearchText(value) {
