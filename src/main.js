@@ -231,15 +231,21 @@ function clearDiagramState() {
 function parseAndSanitizeSvg(svgMarkup) {
   const parser = new DOMParser();
   const documentRoot = parser.parseFromString(svgMarkup, "image/svg+xml");
+  let svgElement = null;
 
-  if (documentRoot.querySelector("parsererror")) {
-    throw new Error("Mermaid returned invalid SVG.");
+  if (!documentRoot.querySelector("parsererror")) {
+    svgElement = documentRoot.documentElement;
   }
 
-  const svgElement = documentRoot.documentElement;
+  // Mermaid labels can legitimately contain HTML that browsers accept inside
+  // foreignObject, while an XML parser rejects it as invalid SVG.
+  if (!svgElement || svgElement.nodeName.toLowerCase() !== "svg") {
+    const htmlDocument = parser.parseFromString(svgMarkup, "text/html");
+    svgElement = htmlDocument.querySelector("svg");
+  }
 
   if (!svgElement || svgElement.nodeName.toLowerCase() !== "svg") {
-    return null;
+    throw new Error("Mermaid returned invalid SVG.");
   }
 
   sanitizeSvgElement(svgElement);
