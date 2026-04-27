@@ -50,10 +50,12 @@ const fontsReady = document.fonts?.ready ?? Promise.resolve();
 
 mermaid.initialize({
   startOnLoad: false,
-  securityLevel: "loose",
+  securityLevel: "strict",
+  maxTextSize: 50000,
+  maxEdges: 500,
   theme: "base",
   flowchart: {
-    htmlLabels: true,
+    htmlLabels: false,
     nodeSpacing: 56,
     rankSpacing: 84,
     curve: "monotoneX",
@@ -182,14 +184,13 @@ async function renderDiagram() {
       return;
     }
 
-    dom.graphHost.innerHTML = svg;
-
-    const svgElement = dom.graphHost.querySelector("svg");
+    const svgElement = parseAndSanitizeSvg(svg);
 
     if (!svgElement) {
       throw new Error("Mermaid did not return an SVG.");
     }
 
+    dom.graphHost.replaceChildren(svgElement);
     prepareSvg(svgElement);
     await nextFrame();
 
@@ -225,6 +226,56 @@ function clearDiagramState() {
   setDiagramMetrics(0, 0);
   dom.zoomBadge.textContent = "100%";
   clearNodeSearchIndex();
+}
+
+function parseAndSanitizeSvg(svgMarkup) {
+  const parser = new DOMParser();
+  const documentRoot = parser.parseFromString(svgMarkup, "image/svg+xml");
+
+  if (documentRoot.querySelector("parsererror")) {
+    throw new Error("Mermaid returned invalid SVG.");
+  }
+
+  const svgElement = documentRoot.documentElement;
+
+  if (!svgElement || svgElement.nodeName.toLowerCase() !== "svg") {
+    return null;
+  }
+
+  sanitizeSvgElement(svgElement);
+  return document.importNode(svgElement, true);
+}
+
+function sanitizeSvgElement(root) {
+  const blockedSelectors = [
+    "script",
+    "foreignObject",
+    "iframe",
+    "object",
+    "embed",
+  ];
+
+  for (const blockedNode of root.querySelectorAll(blockedSelectors.join(","))) {
+    blockedNode.remove();
+  }
+
+  const urlAttributes = ["href", "xlink:href"];
+
+  for (const element of root.querySelectorAll("*")) {
+    for (const attribute of Array.from(element.attributes)) {
+      const name = attribute.name.toLowerCase();
+      const value = attribute.value.trim();
+
+      if (name.startsWith("on")) {
+        element.removeAttribute(attribute.name);
+        continue;
+      }
+
+      if (urlAttributes.includes(name) && /^javascript:/i.test(value)) {
+        element.removeAttribute(attribute.name);
+      }
+    }
+  }
 }
 
 function prepareSvg(svg) {
