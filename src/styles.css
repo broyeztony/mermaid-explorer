@@ -571,6 +571,11 @@ kbd {
   user-select: none;
 }
 
+.viewport-surface:focus,
+.viewport-surface:focus-visible {
+  outline: none;
+}
+
 .viewport-surface[data-cursor-mode="pan"] {
   cursor: grab;
 }
