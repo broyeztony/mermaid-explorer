@@ -94,6 +94,7 @@ function wireEvents() {
   });
 
   dom.sourceInput.addEventListener("input", scheduleRenderDiagram);
+  dom.sourceInput.addEventListener("keydown", onSourceInputKeyDown);
   dom.nodeSearchInput.addEventListener("input", syncNodeSearchResults);
   dom.nodeSearchInput.addEventListener("focus", syncNodeSearchResults);
   dom.nodeSearchInput.addEventListener("keydown", onNodeSearchKeyDown);
@@ -116,6 +117,7 @@ function wireEvents() {
 
   dom.viewportSurface.addEventListener("wheel", onWheel, { passive: false });
   dom.viewportSurface.addEventListener("dblclick", onDoubleClick);
+  dom.viewportSurface.addEventListener("focus", flushRenderDiagram);
   dom.viewportSurface.addEventListener("pointerdown", onPointerDown);
   dom.viewportSurface.addEventListener("pointermove", onPointerMove);
   dom.viewportSurface.addEventListener("pointerup", onPointerUp);
@@ -159,6 +161,27 @@ function scheduleRenderDiagram() {
     state.renderDebounceTimer = 0;
     renderDiagram();
   }, 180);
+}
+
+function flushRenderDiagram() {
+  if (!state.renderDebounceTimer) {
+    return;
+  }
+
+  window.clearTimeout(state.renderDebounceTimer);
+  state.renderDebounceTimer = 0;
+  renderDiagram();
+}
+
+function onSourceInputKeyDown(event) {
+  if (event.key !== "Escape") {
+    return;
+  }
+
+  event.preventDefault();
+  flushRenderDiagram();
+  dom.sourceInput.blur();
+  dom.viewportSurface.focus({ preventScroll: true });
 }
 
 async function renderDiagram() {
@@ -897,6 +920,7 @@ function onPointerDown(event) {
   }
 
   event.preventDefault();
+  dom.viewportSurface.focus({ preventScroll: true });
 
   const rect = dom.viewportSurface.getBoundingClientRect();
   const origin = {
