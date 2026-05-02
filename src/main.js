@@ -9,6 +9,9 @@ const dom = {
   nodeSearchShell: document.querySelector("#nodeSearchShell"),
   nodeSearchInput: document.querySelector("#nodeSearchInput"),
   nodeSearchResults: document.querySelector("#nodeSearchResults"),
+  subgraphQueryInput: document.querySelector("#subgraphQueryInput"),
+  subgraphQueryClearBtn: document.querySelector("#subgraphQueryClearBtn"),
+  subgraphQueryStatus: document.querySelector("#subgraphQueryStatus"),
   panModeBtn: document.querySelector("#panModeBtn"),
   boxModeBtn: document.querySelector("#boxModeBtn"),
   fitBtn: document.querySelector("#fitBtn"),
@@ -37,6 +40,9 @@ const state = {
   searchIndex: [],
   searchMatches: [],
   activeSearchIndex: -1,
+  renderedSource: "",
+  sourceGraphModel: null,
+  subgraphQueryState: null,
   focusedNode: null,
   interaction: null,
   animationFrame: 0,
@@ -95,6 +101,8 @@ function wireEvents() {
 
   dom.sourceInput.addEventListener("input", scheduleRenderDiagram);
   dom.sourceInput.addEventListener("keydown", onSourceInputKeyDown);
+  dom.subgraphQueryInput.addEventListener("input", onSubgraphQueryInput);
+  dom.subgraphQueryClearBtn.addEventListener("click", clearSubgraphQuery);
   dom.nodeSearchInput.addEventListener("input", syncNodeSearchResults);
   dom.nodeSearchInput.addEventListener("focus", syncNodeSearchResults);
   dom.nodeSearchInput.addEventListener("keydown", onNodeSearchKeyDown);
@@ -152,6 +160,8 @@ function loadExample(exampleId) {
   }
 
   dom.sourceInput.value = example.source;
+  dom.subgraphQueryInput.value = "";
+  syncSubgraphQueryUi(getInactiveSubgraphQueryState());
   renderDiagram();
 }
 
@@ -184,18 +194,41 @@ function onSourceInputKeyDown(event) {
   dom.viewportSurface.focus({ preventScroll: true });
 }
 
-async function renderDiagram() {
-  const source = dom.sourceInput.value.trim();
+function onSubgraphQueryInput() {
+  syncSubgraphQueryUi();
+  scheduleRenderDiagram();
+}
 
-  if (!source) {
+function clearSubgraphQuery() {
+  if (!dom.subgraphQueryInput.value) {
+    return;
+  }
+
+  dom.subgraphQueryInput.value = "";
+  syncSubgraphQueryUi(getInactiveSubgraphQueryState());
+  renderDiagram();
+  dom.subgraphQueryInput.focus({ preventScroll: true });
+}
+
+async function renderDiagram() {
+  const fullSource = dom.sourceInput.value.trim();
+
+  if (!fullSource) {
     clearDiagramState();
+    syncSubgraphQueryUi(getInactiveSubgraphQueryState());
     setStatus("Paste Mermaid text to render.", "Awaiting diagram");
     return;
   }
 
+  const queryState = buildSubgraphQueryState(fullSource, dom.subgraphQueryInput.value);
+  const source = queryState.mode === "active"
+    ? queryState.source
+    : fullSource;
+
   const renderToken = ++state.renderToken;
   cancelAnimation();
   setStatus("Rendering diagram...", "Rendering");
+  syncSubgraphQueryUi(queryState);
 
   try {
     await fontsReady;
@@ -221,6 +254,9 @@ async function renderDiagram() {
     state.rawBounds = padRect(graphBounds, Math.max(graphBounds.width, graphBounds.height) * 0.06 + 24);
     state.fitBounds = fitRectToViewport(state.rawBounds);
     state.viewBox = { ...state.fitBounds };
+    state.renderedSource = source;
+    state.sourceGraphModel = queryState.graphModel ?? extractFlowchartModel(fullSource);
+    state.subgraphQueryState = queryState;
     commitViewBox();
     indexDiagramNodes();
     updateDiagramMetrics();
@@ -231,6 +267,13 @@ async function renderDiagram() {
   } catch (error) {
     console.error(error);
     clearDiagramState();
+    state.subgraphQueryState = queryState;
+    syncSubgraphQueryUi({
+      ...queryState,
+      mode: "invalid",
+      message: error.message,
+      source: fullSource,
+    });
     setStatus(error.message, "Render failed");
   }
 }
@@ -244,11 +287,523 @@ function clearDiagramState() {
   state.minimapSvg = null;
   state.minimapFrame = null;
   state.minimapFrameShadow = null;
+  state.renderedSource = "";
+  state.sourceGraphModel = null;
+  state.subgraphQueryState = null;
   dom.graphHost.innerHTML = "";
   dom.minimapHost.innerHTML = "";
   setDiagramMetrics(0, 0);
   dom.zoomBadge.textContent = "100%";
   clearNodeSearchIndex();
+}
+
+function getInactiveSubgraphQueryState() {
+  return {
+    mode: "inactive",
+    source: "",
+    graphModel: null,
+    message: "Filter the viewport with a flowchart query.",
+  };
+}
+
+function syncSubgraphQueryUi(queryState = null) {
+  const nextState = queryState ?? buildSubgraphQueryState(dom.sourceInput.value.trim(), dom.subgraphQueryInput.value);
+  const hasValue = Boolean(dom.subgraphQueryInput.value.trim());
+
+  dom.subgraphQueryClearBtn.hidden = !hasValue;
+  dom.subgraphQueryInput.classList.toggle("is-active", nextState.mode === "active");
+  dom.subgraphQueryInput.classList.toggle("is-invalid", nextState.mode === "invalid");
+  dom.subgraphQueryStatus.textContent = nextState.message;
+  dom.subgraphQueryStatus.classList.toggle("is-active", nextState.mode === "active");
+  dom.subgraphQueryStatus.classList.toggle("is-error", nextState.mode === "invalid");
+}
+
+function buildSubgraphQueryState(source, rawQuery) {
+  const inactiveState = getInactiveSubgraphQueryState();
+
+  if (!source) {
+    return inactiveState;
+  }
+
+  const parsedQuery = parseSubgraphQuery(rawQuery);
+
+  if (parsedQuery.mode === "inactive") {
+    return {
+      ...inactiveState,
+      source,
+    };
+  }
+
+  if (parsedQuery.mode !== "active") {
+    return {
+      ...parsedQuery,
+      source,
+      graphModel: null,
+    };
+  }
+
+  const graphModel = extractFlowchartModel(source);
+
+  if (!graphModel) {
+    return {
+      mode: "invalid",
+      source,
+      graphModel: null,
+      message: "Subgraph query currently supports Mermaid flowcharts only.",
+    };
+  }
+
+  const seedNodeIds = findSeedNodeIds(graphModel, parsedQuery.seed);
+
+  if (!seedNodeIds.length) {
+    return {
+      mode: "invalid",
+      source,
+      graphModel,
+      message: `No node matches "${parsedQuery.seed}".`,
+    };
+  }
+
+  const selection = selectSubgraph(graphModel, seedNodeIds, parsedQuery.direction, parsedQuery.depth);
+  const filteredSource = buildFilteredFlowchartSource(graphModel, selection);
+
+  return {
+    mode: "active",
+    source: filteredSource,
+    graphModel,
+    seed: parsedQuery.seed,
+    direction: parsedQuery.direction,
+    depth: parsedQuery.depth,
+    nodeCount: selection.nodeIds.size,
+    edgeCount: selection.edges.length,
+    message: `Showing ${selection.nodeIds.size} nodes and ${selection.edges.length} edges from "${parsedQuery.seed}".`,
+  };
+}
+
+function parseSubgraphQuery(rawQuery) {
+  const query = `${rawQuery ?? ""}`.trim();
+
+  if (!query) {
+    return getInactiveSubgraphQueryState();
+  }
+
+  const tokenPattern = /([a-z]+)\s*:\s*(?:"([^"]*)"|'([^']*)'|([^\s]+))/gi;
+  const tokens = new Map();
+
+  for (const match of query.matchAll(tokenPattern)) {
+    const key = match[1].toLowerCase();
+    const value = `${match[2] ?? match[3] ?? match[4] ?? ""}`.trim();
+
+    if (tokens.has(key)) {
+      return {
+        mode: "invalid",
+        message: `Duplicate "${key}" in query.`,
+      };
+    }
+
+    tokens.set(key, value);
+  }
+
+  const leftovers = query.replace(tokenPattern, " ").trim();
+
+  if (leftovers) {
+    return {
+      mode: "draft",
+      message: 'Use seed:"Customer Web" direction:out depth:5.',
+    };
+  }
+
+  const seed = tokens.get("seed");
+  const direction = `${tokens.get("direction") ?? ""}`.toLowerCase();
+  const depthRaw = `${tokens.get("depth") ?? ""}`.trim();
+
+  if (!seed || !direction || !depthRaw) {
+    return {
+      mode: "draft",
+      message: 'Use seed:"Customer Web" direction:out depth:5.',
+    };
+  }
+
+  if (!["out", "in", "both"].includes(direction)) {
+    return {
+      mode: "invalid",
+      message: 'Direction must be "out", "in", or "both".',
+    };
+  }
+
+  const depth = Number.parseInt(depthRaw, 10);
+
+  if (!Number.isFinite(depth) || depth < 0) {
+    return {
+      mode: "invalid",
+      message: "Depth must be a whole number starting at 0.",
+    };
+  }
+
+  return {
+    mode: "active",
+    seed,
+    direction,
+    depth,
+    message: "",
+  };
+}
+
+function extractFlowchartModel(source) {
+  const lines = `${source ?? ""}`.split("\n");
+  const header = lines.find((line) => /^\s*(flowchart|graph)\b/i.test(line))?.trim();
+
+  if (!header) {
+    return null;
+  }
+
+  const model = {
+    header,
+    nodeMap: new Map(),
+    nodeOrder: [],
+    edges: [],
+  };
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+
+    if (
+      !line
+      || line.startsWith("%%")
+      || /^(flowchart|graph)\b/i.test(line)
+      || /^subgraph\b/i.test(line)
+      || /^direction\b/i.test(line)
+      || line === "end"
+    ) {
+      continue;
+    }
+
+    const edgeChain = parseEdgeChain(line);
+
+    if (edgeChain) {
+      for (const ref of edgeChain.refs) {
+        registerGraphNode(model, ref);
+      }
+
+      for (const edge of edgeChain.edges) {
+        model.edges.push({
+          ...edge,
+          key: `edge-${model.edges.length}`,
+        });
+      }
+
+      continue;
+    }
+
+    const nodeRef = parseNodeReferenceAt(line, 0);
+
+    if (nodeRef && line.slice(nodeRef.end).trim() === "") {
+      registerGraphNode(model, nodeRef);
+    }
+  }
+
+  return model;
+}
+
+function registerGraphNode(model, ref) {
+  const existing = model.nodeMap.get(ref.id);
+  const explicit = ref.hasShape;
+  const definition = explicit
+    ? ref.definition
+    : defaultNodeDefinition(ref.id, ref.label || ref.id);
+  const label = ref.label || existing?.label || ref.id;
+
+  if (!existing) {
+    model.nodeMap.set(ref.id, {
+      id: ref.id,
+      label,
+      definition,
+      explicit,
+    });
+    model.nodeOrder.push(ref.id);
+    return;
+  }
+
+  if (explicit && !existing.explicit) {
+    existing.label = label;
+    existing.definition = definition;
+    existing.explicit = true;
+    return;
+  }
+
+  if (!existing.label && label) {
+    existing.label = label;
+  }
+}
+
+function parseEdgeChain(line) {
+  const refs = [];
+  const first = parseNodeReferenceAt(line, 0);
+
+  if (!first) {
+    return null;
+  }
+
+  refs.push(first);
+
+  let current = first;
+  let cursor = first.end;
+  const edges = [];
+
+  while (true) {
+    const link = findNextEdgeLink(line, cursor);
+
+    if (!link) {
+      break;
+    }
+
+    refs.push(link.node);
+    edges.push({
+      leftId: current.id,
+      rightId: link.node.id,
+      sourceId: link.direction === "reverse" ? link.node.id : current.id,
+      targetId: link.direction === "reverse" ? current.id : link.node.id,
+      operator: link.operator,
+      direction: link.direction,
+    });
+    current = link.node;
+    cursor = link.node.end;
+  }
+
+  return edges.length ? { refs, edges } : null;
+}
+
+function findNextEdgeLink(line, fromIndex) {
+  const candidatePattern = /[A-Za-z_][\w-]*/g;
+  candidatePattern.lastIndex = fromIndex;
+
+  let match = candidatePattern.exec(line);
+
+  while (match) {
+    if (match.index == null || match.index < fromIndex) {
+      match = candidatePattern.exec(line);
+      continue;
+    }
+
+    const node = parseNodeReferenceAt(line, match.index);
+
+    if (!node) {
+      match = candidatePattern.exec(line);
+      continue;
+    }
+
+    const operator = normalizeEdgeOperator(line.slice(fromIndex, match.index));
+
+    if (!isValidEdgeOperator(operator)) {
+      match = candidatePattern.exec(line);
+      continue;
+    }
+
+    return {
+      node,
+      operator,
+      direction: getEdgeDirection(operator),
+    };
+  }
+
+  return null;
+}
+
+function parseNodeReferenceAt(line, startIndex) {
+  const leadingLength = line.slice(startIndex).match(/^\s*/)?.[0].length ?? 0;
+  const cursor = startIndex + leadingLength;
+  const idMatch = /^[A-Za-z_][\w-]*/.exec(line.slice(cursor));
+
+  if (!idMatch) {
+    return null;
+  }
+
+  const id = idMatch[0];
+  const afterId = cursor + id.length;
+  const shape = parseNodeShape(line, afterId);
+  const end = shape?.end ?? afterId;
+
+  return {
+    id,
+    label: shape?.label ?? "",
+    definition: line.slice(cursor, end).trim(),
+    start: cursor,
+    end,
+    hasShape: Boolean(shape),
+  };
+}
+
+function parseNodeShape(line, startIndex) {
+  const spacing = line.slice(startIndex).match(/^\s*/)?.[0].length ?? 0;
+  const cursor = startIndex + spacing;
+  const shapePairs = [
+    ["((", "))"],
+    ["[[", "]]"],
+    ["{{", "}}"],
+    ["[", "]"],
+    ["(", ")"],
+    ["{", "}"],
+  ];
+
+  for (const [open, close] of shapePairs) {
+    if (!line.startsWith(open, cursor)) {
+      continue;
+    }
+
+    const closeIndex = line.indexOf(close, cursor + open.length);
+
+    if (closeIndex < 0) {
+      return null;
+    }
+
+    const end = closeIndex + close.length;
+    const rawInner = line.slice(cursor + open.length, closeIndex).trim();
+
+    return {
+      end,
+      label: unwrapNodeLabel(rawInner),
+    };
+  }
+
+  return null;
+}
+
+function unwrapNodeLabel(value) {
+  const label = `${value ?? ""}`.trim();
+
+  if (
+    (label.startsWith('"') && label.endsWith('"'))
+    || (label.startsWith("'") && label.endsWith("'"))
+  ) {
+    return label.slice(1, -1).trim();
+  }
+
+  return label;
+}
+
+function normalizeEdgeOperator(value) {
+  return `${value ?? ""}`
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isValidEdgeOperator(operator) {
+  return /[<>]/.test(operator)
+    && /^(?:<?[ox]?[-.=]+(?:\s+[^<>]+?\s+[-.=]+)?[ox]?>?)$/.test(operator);
+}
+
+function getEdgeDirection(operator) {
+  const hasLeftArrow = operator.includes("<");
+  const hasRightArrow = operator.includes(">");
+
+  if (hasLeftArrow && hasRightArrow) {
+    return "both";
+  }
+
+  return hasLeftArrow ? "reverse" : "forward";
+}
+
+function defaultNodeDefinition(id, label) {
+  return `${id}["${escapeMermaidLabel(label)}"]`;
+}
+
+function escapeMermaidLabel(label) {
+  return `${label ?? ""}`.replace(/"/g, '\\"');
+}
+
+function findSeedNodeIds(graphModel, rawSeed) {
+  const seed = normalizeSearchText(rawSeed);
+  const exactLabelMatches = graphModel.nodeOrder
+    .map((id) => graphModel.nodeMap.get(id))
+    .filter((node) => normalizeSearchText(node.label) === seed)
+    .map((node) => node.id);
+
+  if (exactLabelMatches.length) {
+    return exactLabelMatches;
+  }
+
+  return graphModel.nodeOrder.filter((id) => normalizeSearchText(id) === seed);
+}
+
+function selectSubgraph(graphModel, seedNodeIds, direction, depth) {
+  const outgoing = new Map();
+  const incoming = new Map();
+
+  for (const edge of graphModel.edges) {
+    pushAdjacency(outgoing, edge.sourceId, { edge, nextId: edge.targetId });
+    pushAdjacency(incoming, edge.targetId, { edge, nextId: edge.sourceId });
+
+    if (edge.direction === "both") {
+      pushAdjacency(outgoing, edge.targetId, { edge, nextId: edge.sourceId });
+      pushAdjacency(incoming, edge.sourceId, { edge, nextId: edge.targetId });
+    }
+  }
+
+  const nodeIds = new Set(seedNodeIds);
+  const seenDepth = new Map(seedNodeIds.map((id) => [id, 0]));
+  const queue = seedNodeIds.map((id) => ({ id, depth: 0 }));
+
+  while (queue.length) {
+    const current = queue.shift();
+
+    if (!current || current.depth >= depth) {
+      continue;
+    }
+
+    const nextSteps = [];
+
+    if (direction === "out" || direction === "both") {
+      nextSteps.push(...(outgoing.get(current.id) ?? []));
+    }
+
+    if (direction === "in" || direction === "both") {
+      nextSteps.push(...(incoming.get(current.id) ?? []));
+    }
+
+    for (const step of nextSteps) {
+      const nextDepth = current.depth + 1;
+      const previousDepth = seenDepth.get(step.nextId);
+
+      if (previousDepth != null && previousDepth <= nextDepth) {
+        continue;
+      }
+
+      seenDepth.set(step.nextId, nextDepth);
+      nodeIds.add(step.nextId);
+      queue.push({ id: step.nextId, depth: nextDepth });
+    }
+  }
+
+  const edges = graphModel.edges.filter((edge) => nodeIds.has(edge.leftId) && nodeIds.has(edge.rightId));
+  return { nodeIds, edges };
+}
+
+function pushAdjacency(map, key, value) {
+  if (!map.has(key)) {
+    map.set(key, []);
+  }
+
+  map.get(key).push(value);
+}
+
+function buildFilteredFlowchartSource(graphModel, selection) {
+  const lines = [graphModel.header, ""];
+  const selectedNodeIds = graphModel.nodeOrder.filter((id) => selection.nodeIds.has(id));
+
+  for (const id of selectedNodeIds) {
+    const node = graphModel.nodeMap.get(id);
+    lines.push(`  ${node.definition}`);
+  }
+
+  if (selection.edges.length) {
+    lines.push("");
+
+    for (const edge of selection.edges) {
+      lines.push(`  ${edge.leftId} ${edge.operator} ${edge.rightId}`);
+    }
+  }
+
+  return lines.join("\n");
 }
 
 function parseAndSanitizeSvg(svgMarkup) {
@@ -351,7 +906,7 @@ function indexDiagramNodes() {
     return;
   }
 
-  const sourceNodes = extractSourceNodes(dom.sourceInput.value);
+  const sourceNodes = extractSourceNodes(state.renderedSource);
   const renderedNodes = Array.from(state.svg.querySelectorAll(".node"));
 
   state.searchIndex = sourceNodes

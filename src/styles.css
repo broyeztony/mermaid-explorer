@@ -385,7 +385,128 @@ button {
   display: none;
 }
 
+.query-dock {
+  padding: 14px 16px 12px;
+  border-top: 1px solid rgba(30, 30, 30, 0.14);
+  background: rgba(242, 203, 5, 0.72);
+}
+
+.query-label {
+  display: block;
+  margin: 0 0 7px;
+  font-family: Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: rgba(30, 30, 30, 0.68);
+}
+
+.query-shell {
+  position: relative;
+}
+
+.query-input {
+  width: 100%;
+  padding: 10px 38px 10px 12px;
+  border: 1px solid rgba(30, 30, 30, 0.16);
+  border-radius: var(--radius);
+  background: rgba(255, 250, 243, 0.86);
+  color: var(--ink);
+  font-family: Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.query-input::placeholder {
+  color: rgba(30, 30, 30, 0.42);
+}
+
+.query-input.is-invalid {
+  border-color: rgba(167, 73, 14, 0.4);
+  background: rgba(255, 245, 229, 0.95);
+}
+
+.query-input.is-active {
+  border-color: rgba(86, 93, 118, 0.28);
+  background: rgba(255, 252, 248, 0.96);
+}
+
+.query-clear {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  min-width: 22px;
+  height: 22px;
+  min-height: 22px;
+  padding: 0;
+  border: 1px solid rgba(68, 71, 90, 0.16);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  transform: translateY(-50%);
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease;
+}
+
+.query-clear[hidden] {
+  display: none;
+}
+
+.query-clear:hover {
+  border-color: rgba(189, 147, 249, 0.28);
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.query-clear-glyph {
+  position: relative;
+  width: 10px;
+  height: 10px;
+}
+
+.query-clear-glyph::before,
+.query-clear-glyph::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 10px;
+  height: 1.25px;
+  border-radius: 999px;
+  background: rgba(30, 30, 30, 0.68);
+  transform-origin: center;
+}
+
+.query-clear-glyph::before {
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.query-clear-glyph::after {
+  transform: translate(-50%, -50%) rotate(-45deg);
+}
+
+.query-status {
+  min-height: 16px;
+  margin: 7px 0 0;
+  color: rgba(30, 30, 30, 0.56);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.query-status.is-active {
+  color: rgba(40, 48, 65, 0.74);
+}
+
+.query-status.is-error {
+  color: rgba(138, 62, 0, 0.92);
+}
+
 #sourceInput:focus-visible,
+.query-input:focus-visible,
 .select-field select:focus-visible,
 button:focus-visible,
 .viewer:focus-visible {

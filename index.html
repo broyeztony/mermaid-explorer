@@ -6,7 +6,7 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0"
     />
-    <title>Mermaid Explorer</title>
+    <title>SATI Explorer</title>
     <meta
       name="description"
       content="A comfortable large-graph explorer for Mermaid diagrams."
@@ -17,7 +17,7 @@
     <div class="app-shell">
       <header class="topbar">
         <div class="brand">
-          <div class="title">Mermaid Explorer</div>
+          <div class="title">SATI Explorer</div>
         </div>
 
         <div class="topbar-controls">
@@ -80,6 +80,32 @@
             autocomplete="off"
             autocorrect="off"
           ></textarea>
+          <div class="query-dock">
+            <label class="query-label" for="subgraphQueryInput">Subgraph query</label>
+            <div class="query-shell">
+              <input
+                id="subgraphQueryInput"
+                class="query-input"
+                type="text"
+                placeholder='seed:"Customer Web" direction:out depth:5'
+                autocomplete="off"
+                spellcheck="false"
+                aria-label="Subgraph query"
+              />
+              <button
+                id="subgraphQueryClearBtn"
+                type="button"
+                class="query-clear"
+                aria-label="Clear subgraph query"
+                hidden
+              >
+                <span class="query-clear-glyph" aria-hidden="true"></span>
+              </button>
+            </div>
+            <p id="subgraphQueryStatus" class="query-status">
+              Filter the viewport with a flowchart query.
+            </p>
+          </div>
         </section>
 
         <section class="panel viewer-panel">
@@ -141,6 +167,10 @@
             </li>
             <li class="instructions-item">
               Press <kbd>S</kbd> to search. Use <kbd>↑</kbd>/<kbd>↓</kbd> then <kbd>Enter</kbd>.
+            </li>
+            <li class="instructions-item">
+              Try a subgraph query below the source, for example
+              <kbd>seed:"Customer Web" direction:out depth:5</kbd>.
             </li>
             <li class="instructions-item">
               Press <kbd>H</kbd> hand, <kbd>B</kbd> box zoom, <kbd>F</kbd> fit, <kbd>I</kbd> help.

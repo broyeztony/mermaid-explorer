@@ -1,4 +1,4 @@
-# Mermaid Explorer
+# SATI Explorer
 
 A focused Mermaid viewer for navigating large diagrams comfortably.
 
