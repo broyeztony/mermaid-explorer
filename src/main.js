@@ -302,7 +302,7 @@ function getInactiveSubgraphQueryState() {
     mode: "inactive",
     source: "",
     graphModel: null,
-    message: "Filter the viewport with a flowchart query.",
+    message: 'Filter the viewport with a flowchart query. Defaults: direction:out depth:1.',
   };
 }
 
@@ -409,18 +409,18 @@ function parseSubgraphQuery(rawQuery) {
   if (leftovers) {
     return {
       mode: "draft",
-      message: 'Use seed:"Customer Web" direction:out depth:5.',
+      message: 'Use seed:"Customer Web". Optional: direction:out|in|both depth:1.',
     };
   }
 
   const seed = tokens.get("seed");
-  const direction = `${tokens.get("direction") ?? ""}`.toLowerCase();
-  const depthRaw = `${tokens.get("depth") ?? ""}`.trim();
+  const direction = `${tokens.get("direction") ?? "out"}`.toLowerCase();
+  const depthRaw = `${tokens.get("depth") ?? "1"}`.trim();
 
-  if (!seed || !direction || !depthRaw) {
+  if (!seed) {
     return {
       mode: "draft",
-      message: 'Use seed:"Customer Web" direction:out depth:5.',
+      message: 'Use seed:"Customer Web". Optional: direction:out|in|both depth:1.',
     };
   }
 
@@ -574,28 +574,25 @@ function parseEdgeChain(line) {
 }
 
 function findNextEdgeLink(line, fromIndex) {
-  const candidatePattern = /[A-Za-z_][\w-]*/g;
-  candidatePattern.lastIndex = fromIndex;
+  const remainder = line.slice(fromIndex);
+  const operatorPatterns = [
+    /^\s*(<?[ox]?[-.=]+\s+[^<>|]+?\s+[-.=]+[ox]?>)\s*/,
+    /^\s*(<?[ox]?[-.=]+[ox]?>\|[^|]+\|)\s*/,
+    /^\s*(<?[ox]?[-.=]+[ox]?>)\s*/,
+  ];
 
-  let match = candidatePattern.exec(line);
+  for (const pattern of operatorPatterns) {
+    const match = remainder.match(pattern);
 
-  while (match) {
-    if (match.index == null || match.index < fromIndex) {
-      match = candidatePattern.exec(line);
+    if (!match) {
       continue;
     }
 
-    const node = parseNodeReferenceAt(line, match.index);
+    const operator = normalizeEdgeOperator(match[1]);
+    const nodeStart = fromIndex + match[0].length;
+    const node = parseNodeReferenceAt(line, nodeStart);
 
-    if (!node) {
-      match = candidatePattern.exec(line);
-      continue;
-    }
-
-    const operator = normalizeEdgeOperator(line.slice(fromIndex, match.index));
-
-    if (!isValidEdgeOperator(operator)) {
-      match = candidatePattern.exec(line);
+    if (!node || !isValidEdgeOperator(operator)) {
       continue;
     }
 
@@ -688,8 +685,14 @@ function normalizeEdgeOperator(value) {
 }
 
 function isValidEdgeOperator(operator) {
-  return /[<>]/.test(operator)
-    && /^(?:<?[ox]?[-.=]+(?:\s+[^<>]+?\s+[-.=]+)?[ox]?>?)$/.test(operator);
+  return (
+    /[<>]/.test(operator)
+    && (
+      /^(?:<?[ox]?[-.=]+[ox]?>)$/.test(operator)
+      || /^(?:<?[ox]?[-.=]+[ox]?>\|[^|]+\|)$/.test(operator)
+      || /^(?:<?[ox]?[-.=]+\s+[^<>|]+?\s+[-.=]+[ox]?>)$/.test(operator)
+    )
+  );
 }
 
 function getEdgeDirection(operator) {
@@ -741,6 +744,7 @@ function selectSubgraph(graphModel, seedNodeIds, direction, depth) {
 
   const nodeIds = new Set(seedNodeIds);
   const seenDepth = new Map(seedNodeIds.map((id) => [id, 0]));
+  const traversedEdgeKeys = new Set();
   const queue = seedNodeIds.map((id) => ({ id, depth: 0 }));
 
   while (queue.length) {
@@ -764,6 +768,10 @@ function selectSubgraph(graphModel, seedNodeIds, direction, depth) {
       const nextDepth = current.depth + 1;
       const previousDepth = seenDepth.get(step.nextId);
 
+      if (nextDepth <= depth) {
+        traversedEdgeKeys.add(step.edge.key);
+      }
+
       if (previousDepth != null && previousDepth <= nextDepth) {
         continue;
       }
@@ -774,7 +782,7 @@ function selectSubgraph(graphModel, seedNodeIds, direction, depth) {
     }
   }
 
-  const edges = graphModel.edges.filter((edge) => nodeIds.has(edge.leftId) && nodeIds.has(edge.rightId));
+  const edges = graphModel.edges.filter((edge) => traversedEdgeKeys.has(edge.key));
   return { nodeIds, edges };
 }
 
