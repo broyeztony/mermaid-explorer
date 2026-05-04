@@ -82,7 +82,7 @@
           ></textarea>
           <div class="query-dock">
             <label class="query-label" for="subgraphQueryInput">Subgraph query</label>
-            <div class="query-shell">
+            <div class="query-shell" id="subgraphQueryShell">
               <input
                 id="subgraphQueryInput"
                 class="query-input"
@@ -101,6 +101,7 @@
               >
                 <span class="query-clear-glyph" aria-hidden="true"></span>
               </button>
+              <div id="subgraphQueryResults" class="query-results" hidden></div>
             </div>
             <p id="subgraphQueryStatus" class="query-status">
               Filter the viewport with a flowchart query.

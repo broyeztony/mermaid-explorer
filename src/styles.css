@@ -497,6 +497,65 @@ button {
   line-height: 1.35;
 }
 
+.query-results {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  right: 0;
+  left: 0;
+  z-index: 20;
+  max-height: 280px;
+  overflow: auto;
+  padding: 6px;
+  border: 1px solid rgba(30, 30, 30, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 249, 234, 0.98);
+  box-shadow: 0 14px 36px rgba(18, 18, 24, 0.14);
+}
+
+.query-result {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 12px;
+  padding: 9px 10px;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+}
+
+.query-result:hover,
+.query-result:focus-visible {
+  background: rgba(86, 93, 118, 0.08);
+}
+
+.query-result.is-active {
+  background: rgba(189, 147, 249, 0.18);
+}
+
+.query-result-main {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.query-result-text {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.query-result-meta {
+  flex: 0 0 auto;
+  color: rgba(30, 30, 30, 0.48);
+  font-family: Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 10px;
+  letter-spacing: 0.02em;
+}
+
 .query-status.is-active {
   color: rgba(40, 48, 65, 0.74);
 }

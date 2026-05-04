@@ -9,7 +9,9 @@ const dom = {
   nodeSearchShell: document.querySelector("#nodeSearchShell"),
   nodeSearchInput: document.querySelector("#nodeSearchInput"),
   nodeSearchResults: document.querySelector("#nodeSearchResults"),
+  subgraphQueryShell: document.querySelector("#subgraphQueryShell"),
   subgraphQueryInput: document.querySelector("#subgraphQueryInput"),
+  subgraphQueryResults: document.querySelector("#subgraphQueryResults"),
   subgraphQueryClearBtn: document.querySelector("#subgraphQueryClearBtn"),
   subgraphQueryStatus: document.querySelector("#subgraphQueryStatus"),
   panModeBtn: document.querySelector("#panModeBtn"),
@@ -43,6 +45,9 @@ const state = {
   renderedSource: "",
   sourceGraphModel: null,
   subgraphQueryState: null,
+  subgraphQuerySuggestions: [],
+  activeSubgraphQuerySuggestionIndex: -1,
+  subgraphQueryCompletion: null,
   focusedNode: null,
   interaction: null,
   animationFrame: 0,
@@ -102,7 +107,20 @@ function wireEvents() {
   dom.sourceInput.addEventListener("input", scheduleRenderDiagram);
   dom.sourceInput.addEventListener("keydown", onSourceInputKeyDown);
   dom.subgraphQueryInput.addEventListener("input", onSubgraphQueryInput);
+  dom.subgraphQueryInput.addEventListener("focus", syncSubgraphQuerySuggestions);
+  dom.subgraphQueryInput.addEventListener("keydown", onSubgraphQueryKeyDown);
+  dom.subgraphQueryInput.addEventListener("blur", () => {
+    requestAnimationFrame(() => {
+      if (!dom.subgraphQueryShell.matches(":focus-within")) {
+        hideSubgraphQuerySuggestions();
+      }
+    });
+  });
   dom.subgraphQueryClearBtn.addEventListener("click", clearSubgraphQuery);
+  dom.subgraphQueryResults.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+  });
+  dom.subgraphQueryResults.addEventListener("click", onSubgraphQuerySuggestionClick);
   dom.nodeSearchInput.addEventListener("input", syncNodeSearchResults);
   dom.nodeSearchInput.addEventListener("focus", syncNodeSearchResults);
   dom.nodeSearchInput.addEventListener("keydown", onNodeSearchKeyDown);
@@ -162,6 +180,7 @@ function loadExample(exampleId) {
   dom.sourceInput.value = example.source;
   dom.subgraphQueryInput.value = "";
   syncSubgraphQueryUi(getInactiveSubgraphQueryState());
+  hideSubgraphQuerySuggestions();
   renderDiagram();
 }
 
@@ -196,6 +215,7 @@ function onSourceInputKeyDown(event) {
 
 function onSubgraphQueryInput() {
   syncSubgraphQueryUi();
+  syncSubgraphQuerySuggestions();
   scheduleRenderDiagram();
 }
 
@@ -206,6 +226,7 @@ function clearSubgraphQuery() {
 
   dom.subgraphQueryInput.value = "";
   syncSubgraphQueryUi(getInactiveSubgraphQueryState());
+  hideSubgraphQuerySuggestions();
   renderDiagram();
   dom.subgraphQueryInput.focus({ preventScroll: true });
 }
@@ -290,11 +311,15 @@ function clearDiagramState() {
   state.renderedSource = "";
   state.sourceGraphModel = null;
   state.subgraphQueryState = null;
+  state.subgraphQuerySuggestions = [];
+  state.activeSubgraphQuerySuggestionIndex = -1;
+  state.subgraphQueryCompletion = null;
   dom.graphHost.innerHTML = "";
   dom.minimapHost.innerHTML = "";
   setDiagramMetrics(0, 0);
   dom.zoomBadge.textContent = "100%";
   clearNodeSearchIndex();
+  hideSubgraphQuerySuggestions();
 }
 
 function getInactiveSubgraphQueryState() {
@@ -316,6 +341,545 @@ function syncSubgraphQueryUi(queryState = null) {
   dom.subgraphQueryStatus.textContent = nextState.message;
   dom.subgraphQueryStatus.classList.toggle("is-active", nextState.mode === "active");
   dom.subgraphQueryStatus.classList.toggle("is-error", nextState.mode === "invalid");
+}
+
+function syncSubgraphQuerySuggestions() {
+  const source = dom.sourceInput.value.trim();
+  const rawQuery = dom.subgraphQueryInput.value;
+
+  if (!source || document.activeElement !== dom.subgraphQueryInput) {
+    hideSubgraphQuerySuggestions();
+    return;
+  }
+
+  const caret = dom.subgraphQueryInput.selectionStart ?? rawQuery.length;
+  const completion = getSubgraphQueryCompletion(rawQuery, caret);
+  const suggestions = buildSubgraphQuerySuggestions(source, rawQuery, completion);
+
+  state.subgraphQueryCompletion = completion;
+  state.subgraphQuerySuggestions = suggestions;
+  state.activeSubgraphQuerySuggestionIndex = suggestions.length ? 0 : -1;
+  renderSubgraphQuerySuggestions(suggestions);
+}
+
+function getSubgraphQueryCompletion(rawQuery, caret) {
+  const value = `${rawQuery ?? ""}`;
+  const safeCaret = Math.max(0, Math.min(caret, value.length));
+  const before = value.slice(0, safeCaret);
+
+  const quotedSeedMatch = before.match(/(?:^|\s)seed:\s*"([^"]*)$/i);
+
+  if (quotedSeedMatch) {
+    return {
+      kind: "seed",
+      start: safeCaret - quotedSeedMatch[1].length,
+      end: safeCaret,
+      partial: quotedSeedMatch[1],
+      quoted: true,
+    };
+  }
+
+  const bareSeedMatch = before.match(/(?:^|\s)seed:\s*([^\s"]*)$/i);
+
+  if (bareSeedMatch) {
+    return {
+      kind: "seed",
+      start: safeCaret - bareSeedMatch[1].length,
+      end: safeCaret,
+      partial: bareSeedMatch[1],
+      quoted: false,
+    };
+  }
+
+  const directionMatch = before.match(/(?:^|\s)direction:\s*([^\s]*)$/i);
+
+  if (directionMatch) {
+    return {
+      kind: "direction",
+      start: safeCaret - directionMatch[1].length,
+      end: safeCaret,
+      partial: directionMatch[1],
+    };
+  }
+
+  const depthMatch = before.match(/(?:^|\s)depth:\s*([^\s]*)$/i);
+
+  if (depthMatch) {
+    return {
+      kind: "depth",
+      start: safeCaret - depthMatch[1].length,
+      end: safeCaret,
+      partial: depthMatch[1],
+    };
+  }
+
+  if (/\s$/.test(before) || !before.trim()) {
+    return {
+      kind: "append",
+      start: safeCaret,
+      end: safeCaret,
+      partial: "",
+    };
+  }
+
+  const lastTokenMatch = before.match(/\S+$/);
+  const lastToken = lastTokenMatch?.[0] ?? "";
+  const lastTokenStart = safeCaret - lastToken.length;
+
+  if (!hasSubgraphQueryToken(value, "seed") && !value.includes(":")) {
+    return {
+      kind: "seed-freeform",
+      start: lastTokenStart,
+      end: safeCaret,
+      partial: lastToken,
+    };
+  }
+
+  if (/^(s|se|see|seed)$/i.test(lastToken)) {
+    return {
+      kind: "token-key",
+      start: lastTokenStart,
+      end: safeCaret,
+      partial: lastToken,
+      token: "seed",
+    };
+  }
+
+  if (/^(d|di|dir|dire|direc|direct|directi|directio|direction)$/i.test(lastToken)) {
+    return {
+      kind: "token-key",
+      start: lastTokenStart,
+      end: safeCaret,
+      partial: lastToken,
+      token: "direction",
+    };
+  }
+
+  if (/^(de|dep|dept|depth)$/i.test(lastToken)) {
+    return {
+      kind: "token-key",
+      start: lastTokenStart,
+      end: safeCaret,
+      partial: lastToken,
+      token: "depth",
+    };
+  }
+
+  return null;
+}
+
+function buildSubgraphQuerySuggestions(source, rawQuery, completion) {
+  if (!completion) {
+    return [];
+  }
+
+  if (completion.kind === "seed" || completion.kind === "seed-freeform") {
+    return getSeedSuggestions(source, completion.partial)
+      .slice(0, 10)
+      .map((item, index) => ({
+        key: `seed-${index}-${item.id}`,
+        label: item.displayLabel,
+        meta: item.displayLabel !== item.id ? item.id : "seed",
+        insertText: `seed:"${item.displayLabel}"`,
+        trailingSpace: true,
+      }));
+  }
+
+  if (completion.kind === "direction") {
+    return getDirectionSuggestions(completion.partial).map((direction) => ({
+      key: `direction-${direction}`,
+      label: `direction:${direction}`,
+      meta: direction === "inout" ? "incoming + outgoing" : direction,
+      insertText: direction,
+      trailingSpace: true,
+    }));
+  }
+
+  if (completion.kind === "depth") {
+    return getDepthSuggestions(completion.partial).map((depth) => ({
+      key: `depth-${depth}`,
+      label: `depth:${depth}`,
+      meta: depth === 1 ? "default" : "hops",
+      insertText: `${depth}`,
+      trailingSpace: false,
+    }));
+  }
+
+  if (completion.kind === "token-key") {
+    return getTokenKeySuggestions(completion.token, completion.partial);
+  }
+
+  if (completion.kind === "append") {
+    return getAppendSuggestions(source, rawQuery);
+  }
+
+  return [];
+}
+
+function getSeedSuggestions(source, partial) {
+  const graphModel = extractFlowchartModel(source);
+
+  if (!graphModel) {
+    return [];
+  }
+
+  const query = normalizeSearchText(partial);
+  const unique = new Map();
+
+  for (const id of graphModel.nodeOrder) {
+    const node = graphModel.nodeMap.get(id);
+    const displayLabel = cleanGraphLabel(node.label || id);
+    const idText = normalizeSearchText(id);
+    const labelText = normalizeSearchText(displayLabel);
+    const searchText = `${labelText} ${idText}`.trim();
+
+    if (!displayLabel || unique.has(`${displayLabel}::${id}`)) {
+      continue;
+    }
+
+    if (query && !searchText.includes(query)) {
+      continue;
+    }
+
+    unique.set(`${displayLabel}::${id}`, {
+      id,
+      displayLabel,
+      labelText,
+      idText,
+    });
+  }
+
+  return Array.from(unique.values()).sort((left, right) => {
+    const leftRank = getSeedSuggestionRank(left, query);
+    const rightRank = getSeedSuggestionRank(right, query);
+
+    if (leftRank !== rightRank) {
+      return leftRank - rightRank;
+    }
+
+    return left.displayLabel.localeCompare(right.displayLabel);
+  });
+}
+
+function getSeedSuggestionRank(item, query) {
+  if (!query) {
+    return 3;
+  }
+
+  if (item.labelText === query || item.idText === query) {
+    return 0;
+  }
+
+  if (item.labelText.startsWith(query) || item.idText.startsWith(query)) {
+    return 1;
+  }
+
+  return 2;
+}
+
+function getDirectionSuggestions(partial) {
+  const query = normalizeSearchText(partial);
+  return ["out", "in", "inout"].filter((direction) => direction.includes(query));
+}
+
+function getDepthSuggestions(partial) {
+  const depthValues = [0, 1, 2, 3, 4, 5, 6, 8, 10];
+  const query = `${partial ?? ""}`.trim();
+
+  if (!query) {
+    return depthValues;
+  }
+
+  return depthValues.filter((value) => `${value}`.startsWith(query));
+}
+
+function getTokenKeySuggestions(token, partial) {
+  const normalizedPartial = normalizeSearchText(partial);
+  const suggestions = [];
+
+  if (token === "seed" && "seed".startsWith(normalizedPartial)) {
+    suggestions.push({
+      key: "token-seed",
+      label: 'seed:"..."',
+      meta: "node",
+      insertText: "seed:\"",
+      trailingSpace: false,
+    });
+  }
+
+  if (token === "direction" && "direction".startsWith(normalizedPartial)) {
+    suggestions.push(
+      {
+        key: "token-direction-out",
+        label: "direction:out",
+        meta: "outgoing",
+        insertText: "direction:out",
+        trailingSpace: true,
+      },
+      {
+        key: "token-direction-in",
+        label: "direction:in",
+        meta: "incoming",
+        insertText: "direction:in",
+        trailingSpace: true,
+      },
+      {
+        key: "token-direction-inout",
+        label: "direction:inout",
+        meta: "incoming + outgoing",
+        insertText: "direction:inout",
+        trailingSpace: true,
+      },
+    );
+  }
+
+  if (token === "depth" && "depth".startsWith(normalizedPartial)) {
+    suggestions.push({
+      key: "token-depth",
+      label: "depth:1",
+      meta: "default",
+      insertText: "depth:1",
+      trailingSpace: false,
+    });
+  }
+
+  return suggestions;
+}
+
+function getAppendSuggestions(source, rawQuery) {
+  const suggestions = [];
+  const hasSeed = hasSubgraphQueryToken(rawQuery, "seed");
+  const hasDirection = hasSubgraphQueryToken(rawQuery, "direction");
+  const hasDepth = hasSubgraphQueryToken(rawQuery, "depth");
+
+  if (!hasSeed) {
+    return getSeedSuggestions(source, "").slice(0, 8).map((item, index) => ({
+      key: `append-seed-${index}-${item.id}`,
+      label: item.displayLabel,
+      meta: item.displayLabel !== item.id ? item.id : "seed",
+      insertText: `seed:"${item.displayLabel}"`,
+      trailingSpace: true,
+    }));
+  }
+
+  if (!hasDirection) {
+    suggestions.push(
+      {
+        key: "append-direction-out",
+        label: "direction:out",
+        meta: "default",
+        insertText: "direction:out",
+        trailingSpace: true,
+      },
+      {
+        key: "append-direction-in",
+        label: "direction:in",
+        meta: "incoming",
+        insertText: "direction:in",
+        trailingSpace: true,
+      },
+      {
+        key: "append-direction-inout",
+        label: "direction:inout",
+        meta: "incoming + outgoing",
+        insertText: "direction:inout",
+        trailingSpace: true,
+      },
+    );
+  }
+
+  if (!hasDepth) {
+    suggestions.push(
+      {
+        key: "append-depth-1",
+        label: "depth:1",
+        meta: "default",
+        insertText: "depth:1",
+        trailingSpace: false,
+      },
+      {
+        key: "append-depth-2",
+        label: "depth:2",
+        meta: "hops",
+        insertText: "depth:2",
+        trailingSpace: false,
+      },
+      {
+        key: "append-depth-3",
+        label: "depth:3",
+        meta: "hops",
+        insertText: "depth:3",
+        trailingSpace: false,
+      },
+    );
+  }
+
+  return suggestions;
+}
+
+function hasSubgraphQueryToken(rawQuery, token) {
+  return new RegExp(`(?:^|\\s)${token}\\s*:`, "i").test(`${rawQuery ?? ""}`);
+}
+
+function renderSubgraphQuerySuggestions(suggestions) {
+  dom.subgraphQueryResults.replaceChildren();
+
+  if (!suggestions.length) {
+    hideSubgraphQuerySuggestions();
+    return;
+  }
+
+  const fragment = document.createDocumentFragment();
+
+  for (const [index, suggestion] of suggestions.entries()) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "query-result";
+    button.id = `subgraph-query-result-${index}`;
+    button.dataset.suggestionIndex = `${index}`;
+    button.setAttribute("aria-selected", index === state.activeSubgraphQuerySuggestionIndex ? "true" : "false");
+
+    if (index === state.activeSubgraphQuerySuggestionIndex) {
+      button.classList.add("is-active");
+    }
+
+    const main = document.createElement("span");
+    main.className = "query-result-main";
+
+    const text = document.createElement("span");
+    text.className = "query-result-text";
+    text.textContent = suggestion.label;
+    main.append(text);
+
+    button.append(main);
+
+    if (suggestion.meta) {
+      const meta = document.createElement("span");
+      meta.className = "query-result-meta";
+      meta.textContent = suggestion.meta;
+      button.append(meta);
+    }
+
+    fragment.append(button);
+  }
+
+  dom.subgraphQueryResults.append(fragment);
+  dom.subgraphQueryResults.hidden = false;
+  updateActiveSubgraphQuerySuggestion(false);
+}
+
+function hideSubgraphQuerySuggestions() {
+  dom.subgraphQueryResults.hidden = true;
+  dom.subgraphQueryResults.replaceChildren();
+  state.subgraphQuerySuggestions = [];
+  state.activeSubgraphQuerySuggestionIndex = -1;
+  state.subgraphQueryCompletion = null;
+}
+
+function updateActiveSubgraphQuerySuggestion(shouldScroll = true) {
+  const results = Array.from(dom.subgraphQueryResults.querySelectorAll(".query-result"));
+
+  for (const [index, result] of results.entries()) {
+    const isActive = index === state.activeSubgraphQuerySuggestionIndex;
+    result.classList.toggle("is-active", isActive);
+    result.setAttribute("aria-selected", isActive ? "true" : "false");
+
+    if (isActive && shouldScroll) {
+      result.scrollIntoView({ block: "nearest" });
+    }
+  }
+}
+
+function onSubgraphQueryKeyDown(event) {
+  if (event.key === "ArrowDown") {
+    if (!state.subgraphQuerySuggestions.length) {
+      syncSubgraphQuerySuggestions();
+    }
+
+    if (!state.subgraphQuerySuggestions.length) {
+      return;
+    }
+
+    event.preventDefault();
+    state.activeSubgraphQuerySuggestionIndex = Math.min(
+      state.activeSubgraphQuerySuggestionIndex + 1,
+      state.subgraphQuerySuggestions.length - 1,
+    );
+    updateActiveSubgraphQuerySuggestion();
+    return;
+  }
+
+  if (event.key === "ArrowUp") {
+    if (!state.subgraphQuerySuggestions.length) {
+      syncSubgraphQuerySuggestions();
+    }
+
+    if (!state.subgraphQuerySuggestions.length) {
+      return;
+    }
+
+    event.preventDefault();
+    state.activeSubgraphQuerySuggestionIndex = state.activeSubgraphQuerySuggestionIndex <= 0
+      ? state.subgraphQuerySuggestions.length - 1
+      : state.activeSubgraphQuerySuggestionIndex - 1;
+    updateActiveSubgraphQuerySuggestion();
+    return;
+  }
+
+  if ((event.key === "Enter" || event.key === "Tab") && state.subgraphQuerySuggestions.length) {
+    event.preventDefault();
+    applySubgraphQuerySuggestion(
+      state.subgraphQuerySuggestions[Math.max(state.activeSubgraphQuerySuggestionIndex, 0)],
+    );
+    return;
+  }
+
+  if (event.key === "Escape") {
+    hideSubgraphQuerySuggestions();
+  }
+}
+
+function onSubgraphQuerySuggestionClick(event) {
+  const button = event.target instanceof Element
+    ? event.target.closest(".query-result")
+    : null;
+
+  if (!button) {
+    return;
+  }
+
+  const index = Number(button.dataset.suggestionIndex ?? -1);
+  const suggestion = state.subgraphQuerySuggestions[index];
+
+  if (!suggestion) {
+    return;
+  }
+
+  state.activeSubgraphQuerySuggestionIndex = index;
+  applySubgraphQuerySuggestion(suggestion);
+}
+
+function applySubgraphQuerySuggestion(suggestion) {
+  const input = dom.subgraphQueryInput;
+  const completion = state.subgraphQueryCompletion ?? {
+    start: input.selectionStart ?? input.value.length,
+    end: input.selectionStart ?? input.value.length,
+  };
+  const before = input.value.slice(0, completion.start);
+  const after = input.value.slice(completion.end);
+  const needsSpace = suggestion.trailingSpace
+    && !after.startsWith(" ")
+    && !after.startsWith("\n");
+  const inserted = `${suggestion.insertText}${needsSpace ? " " : ""}`;
+  const nextValue = `${before}${inserted}${after}`;
+  const nextCaret = before.length + inserted.length;
+
+  input.value = nextValue;
+  input.focus({ preventScroll: true });
+  input.setSelectionRange(nextCaret, nextCaret);
+  syncSubgraphQueryUi();
+  syncSubgraphQuerySuggestions();
+  renderDiagram();
 }
 
 function buildSubgraphQueryState(source, rawQuery) {
@@ -409,25 +973,25 @@ function parseSubgraphQuery(rawQuery) {
   if (leftovers) {
     return {
       mode: "draft",
-      message: 'Use seed:"Customer Web". Optional: direction:out|in|both depth:1.',
+      message: 'Use seed:"Customer Web". Optional: direction:out|in|inout depth:1.',
     };
   }
 
   const seed = tokens.get("seed");
-  const direction = `${tokens.get("direction") ?? "out"}`.toLowerCase();
+  const direction = normalizeSubgraphDirection(tokens.get("direction") ?? "out");
   const depthRaw = `${tokens.get("depth") ?? "1"}`.trim();
 
   if (!seed) {
     return {
       mode: "draft",
-      message: 'Use seed:"Customer Web". Optional: direction:out|in|both depth:1.',
+      message: 'Use seed:"Customer Web". Optional: direction:out|in|inout depth:1.',
     };
   }
 
-  if (!["out", "in", "both"].includes(direction)) {
+  if (!["out", "in", "inout"].includes(direction)) {
     return {
       mode: "invalid",
-      message: 'Direction must be "out", "in", or "both".',
+      message: 'Direction must be "out", "in", or "inout".',
     };
   }
 
@@ -706,6 +1270,11 @@ function getEdgeDirection(operator) {
   return hasLeftArrow ? "reverse" : "forward";
 }
 
+function normalizeSubgraphDirection(value) {
+  const normalized = `${value ?? ""}`.toLowerCase();
+  return normalized === "both" ? "inout" : normalized;
+}
+
 function defaultNodeDefinition(id, label) {
   return `${id}["${escapeMermaidLabel(label)}"]`;
 }
@@ -718,7 +1287,7 @@ function findSeedNodeIds(graphModel, rawSeed) {
   const seed = normalizeSearchText(rawSeed);
   const exactLabelMatches = graphModel.nodeOrder
     .map((id) => graphModel.nodeMap.get(id))
-    .filter((node) => normalizeSearchText(node.label) === seed)
+    .filter((node) => normalizeSearchText(cleanGraphLabel(node.label)) === seed)
     .map((node) => node.id);
 
   if (exactLabelMatches.length) {
@@ -726,6 +1295,14 @@ function findSeedNodeIds(graphModel, rawSeed) {
   }
 
   return graphModel.nodeOrder.filter((id) => normalizeSearchText(id) === seed);
+}
+
+function cleanGraphLabel(label) {
+  return `${label ?? ""}`
+    .replace(/<br\s*\/?>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function selectSubgraph(graphModel, seedNodeIds, direction, depth) {
@@ -756,11 +1333,11 @@ function selectSubgraph(graphModel, seedNodeIds, direction, depth) {
 
     const nextSteps = [];
 
-    if (direction === "out" || direction === "both") {
+    if (direction === "out" || direction === "inout") {
       nextSteps.push(...(outgoing.get(current.id) ?? []));
     }
 
-    if (direction === "in" || direction === "both") {
+    if (direction === "in" || direction === "inout") {
       nextSteps.push(...(incoming.get(current.id) ?? []));
     }
 
@@ -1221,10 +1798,15 @@ function onDocumentPointerDown(event) {
     return;
   }
 
+  if (dom.subgraphQueryShell.contains(event.target)) {
+    return;
+  }
+
   if (dom.nodeSearchShell.contains(event.target)) {
     return;
   }
 
+  hideSubgraphQuerySuggestions();
   hideNodeSearchResults();
 }
 
