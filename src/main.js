@@ -6,6 +6,7 @@ import "./styles.css";
 const dom = {
   instructionsModal: document.querySelector("#instructionsModal"),
   instructionsCloseBtn: document.querySelector("#instructionsCloseBtn"),
+  layoutPresetSelect: document.querySelector("#layoutPresetSelect"),
   nodeSearchShell: document.querySelector("#nodeSearchShell"),
   nodeSearchInput: document.querySelector("#nodeSearchInput"),
   nodeSearchResults: document.querySelector("#nodeSearchResults"),
@@ -31,6 +32,7 @@ const dom = {
 };
 
 const state = {
+  layoutPreset: "readable-lr",
   mode: "pan",
   rawBounds: null,
   fitBounds: null,
@@ -59,7 +61,7 @@ const state = {
 
 const fontsReady = document.fonts?.ready ?? Promise.resolve();
 
-mermaid.initialize({
+const baseMermaidConfig = {
   startOnLoad: false,
   securityLevel: "strict",
   maxTextSize: 50000,
@@ -85,7 +87,9 @@ mermaid.initialize({
     edgeLabelBackground: "#faf7ff",
     background: "#ffffff",
   },
-});
+};
+
+mermaid.initialize(baseMermaidConfig);
 
 init();
 
@@ -106,6 +110,7 @@ function wireEvents() {
 
   dom.sourceInput.addEventListener("input", scheduleRenderDiagram);
   dom.sourceInput.addEventListener("keydown", onSourceInputKeyDown);
+  dom.layoutPresetSelect.addEventListener("change", onLayoutPresetChange);
   dom.subgraphQueryInput.addEventListener("input", onSubgraphQueryInput);
   dom.subgraphQueryInput.addEventListener("focus", syncSubgraphQuerySuggestions);
   dom.subgraphQueryInput.addEventListener("keydown", onSubgraphQueryKeyDown);
@@ -219,6 +224,11 @@ function onSubgraphQueryInput() {
   scheduleRenderDiagram();
 }
 
+function onLayoutPresetChange() {
+  state.layoutPreset = dom.layoutPresetSelect.value;
+  renderDiagram();
+}
+
 function clearSubgraphQuery() {
   if (!dom.subgraphQueryInput.value) {
     return;
@@ -245,6 +255,7 @@ async function renderDiagram() {
   const source = queryState.mode === "active"
     ? queryState.source
     : fullSource;
+  const renderSource = applyLayoutPresetToSource(source, state.layoutPreset);
 
   const renderToken = ++state.renderToken;
   cancelAnimation();
@@ -255,7 +266,8 @@ async function renderDiagram() {
     await fontsReady;
 
     const renderId = `mermaid-explorer-${renderToken}`;
-    const { svg } = await mermaid.render(renderId, source);
+    mermaid.initialize(buildMermaidConfig(state.layoutPreset));
+    const { svg } = await mermaid.render(renderId, renderSource);
 
     if (renderToken !== state.renderToken) {
       return;
@@ -297,6 +309,61 @@ async function renderDiagram() {
     });
     setStatus(error.message, "Render failed");
   }
+}
+
+function buildMermaidConfig(layoutPreset) {
+  const flowchart =
+    layoutPreset === "readable-lr" || layoutPreset === "readable-td"
+      ? {
+          ...baseMermaidConfig.flowchart,
+          defaultRenderer: "elk",
+          nodeSpacing: 72,
+          rankSpacing: 116,
+          wrappingWidth: 164,
+          padding: 26,
+        }
+      : { ...baseMermaidConfig.flowchart };
+
+  return {
+    ...baseMermaidConfig,
+    flowchart,
+    themeVariables: { ...baseMermaidConfig.themeVariables },
+  };
+}
+
+function applyLayoutPresetToSource(source, layoutPreset) {
+  if (!source || layoutPreset === "source") {
+    return source;
+  }
+
+  if (layoutPreset === "readable-lr") {
+    return overrideFlowchartDirection(source, "LR");
+  }
+
+  if (layoutPreset === "readable-td") {
+    return overrideFlowchartDirection(source, "TD");
+  }
+
+  return source;
+}
+
+function overrideFlowchartDirection(source, direction) {
+  const lines = `${source ?? ""}`.split("\n");
+  const headerIndex = lines.findIndex((line) => /^\s*(flowchart|graph)\b/i.test(line));
+
+  if (headerIndex < 0) {
+    return source;
+  }
+
+  const headerLine = lines[headerIndex];
+  const match = headerLine.match(/^(\s*(?:flowchart|graph))(?:\s+\w+)?(.*)$/i);
+
+  if (!match) {
+    return source;
+  }
+
+  lines[headerIndex] = `${match[1]} ${direction}${match[2] ?? ""}`.trimEnd();
+  return lines.join("\n");
 }
 
 function clearDiagramState() {

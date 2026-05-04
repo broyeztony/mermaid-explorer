@@ -21,6 +21,15 @@
         </div>
 
         <div class="topbar-controls">
+          <div class="select-field">
+            <label class="sr-only" for="layoutPresetSelect">Layout preset</label>
+            <select id="layoutPresetSelect" aria-label="Layout preset">
+              <option value="readable-lr">Readable LR</option>
+              <option value="source">Source Layout</option>
+              <option value="readable-td">Readable TD</option>
+            </select>
+          </div>
+
           <div
             class="mode-switch"
             role="tablist"
@@ -172,6 +181,9 @@
             <li class="instructions-item">
               Try a subgraph query below the source, for example
               <kbd>seed:"Customer Web"</kbd>.
+            </li>
+            <li class="instructions-item">
+              Use the layout preset when a large flowchart is too tangled in its source layout.
             </li>
             <li class="instructions-item">
               Press <kbd>H</kbd> hand, <kbd>B</kbd> box zoom, <kbd>F</kbd> fit, <kbd>I</kbd> help.
